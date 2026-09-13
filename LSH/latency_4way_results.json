@@ -1,0 +1,80 @@
+{
+    "Positive Queries (In Database)": {
+        "1_only_minhash": {
+            "name": "Only MinHash (No LSH, No Bloom)",
+            "avg_latency_ms": 75.8105649999925,
+            "total_sec": 7.581056499999249,
+            "throughput_qps": 13.19077360787509
+        },
+        "2_lsh_and_bloom": {
+            "name": "LSH + Bloom Filter",
+            "avg_latency_ms": 7.139581999999791,
+            "total_sec": 0.7139581999999791,
+            "throughput_qps": 140.06422224718887
+        },
+        "3_bloom_no_lsh": {
+            "name": "Bloom Filter (No LSH)",
+            "avg_latency_ms": 71.92190700000538,
+            "total_sec": 7.192190700000538,
+            "throughput_qps": 13.903969481787033
+        },
+        "4_lsh_no_bloom": {
+            "name": "LSH (No Bloom Filter)",
+            "avg_latency_ms": 6.984410999993997, 
+            "total_sec": 0.6984410999993997,
+            "throughput_qps": 143.17599579991204
+        }
+    },
+    "Negative Queries (Not In Database)": {
+        "1_only_minhash": {
+            "name": "Only MinHash (No LSH, No Bloom)",
+            "avg_latency_ms": 63.58658199999809,
+            "total_sec": 6.358658199999809,
+            "throughput_qps": 15.726588354757457
+        },
+        "2_lsh_and_bloom": {
+            "name": "LSH + Bloom Filter",
+            "avg_latency_ms": 0.006449000002248795,
+            "total_sec": 0.0006449000002248795,
+            "throughput_qps": 155062.80038010475
+        },
+        "3_bloom_no_lsh": {
+            "name": "Bloom Filter (No LSH)",
+            "avg_latency_ms": 0.006014000000504893,
+            "total_sec": 0.0006014000000504893,
+            "throughput_qps": 166278.68305887046
+        },
+        "4_lsh_no_bloom": {
+            "name": "LSH (No Bloom Filter)",
+            "avg_latency_ms": 0.1659769999969285,
+            "total_sec": 0.01659769999969285,
+            "throughput_qps": 6024.931165272933
+        }
+    },
+    "Mixed Workload (50% Positive / 50% Negative)": {
+        "1_only_minhash": {
+            "name": "Only MinHash (No LSH, No Bloom)",
+            "avg_latency_ms": 66.49694000000636,
+            "total_sec": 6.649694000000636,
+            "throughput_qps": 15.03828597225533
+        },
+        "2_lsh_and_bloom": {
+            "name": "LSH + Bloom Filter",
+            "avg_latency_ms": 3.547383000004629,
+            "total_sec": 0.3547383000004629,
+            "throughput_qps": 281.89795124989183
+        },
+        "3_bloom_no_lsh": {
+            "name": "Bloom Filter (No LSH)",
+            "avg_latency_ms": 35.18332200000259,
+            "total_sec": 3.518332200000259,
+            "throughput_qps": 28.422557710722323
+        },
+        "4_lsh_no_bloom": {
+            "name": "LSH (No Bloom Filter)",
+            "avg_latency_ms": 3.6237419999997655,
+            "total_sec": 0.36237419999997655,
+            "throughput_qps": 275.9578358503626
+        }
+    }
+}

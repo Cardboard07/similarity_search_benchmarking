@@ -1,0 +1,8 @@
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+
+# Ignore contents of data_structure but keep directory
+data_structure/*
+!data_structure/.gitkeep
+

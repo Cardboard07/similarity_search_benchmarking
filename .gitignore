@@ -1,0 +1,20 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.ipynb_checkpoints/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+
+# Ignore contents of fingerprint_dataset but keep directory
+fingerprint_dataset/*
+!fingerprint_dataset/.gitkeep
+
+# Ignore contents of data_structure but keep directory
+**/data_structure/*
+!**/data_structure/.gitkeep

@@ -1,0 +1,93 @@
+{
+    "dataset_summary": {
+        "total_queries_evaluated": 500,
+        "queries_with_ground_truth_in_db": 500,
+        "queries_without_ground_truth_in_db": 0,
+        "train_database_size": 10000
+    },
+    "bloom_filter_summary": {
+        "enabled": true,
+        "mode": "identity",
+        "queries_screened": 500,
+        "queries_passed_filter": 500,
+        "queries_pruned_before_search": 0,
+        "false_negatives": 0,
+        "false_negative_rate_pct": 0.0,
+        "avg_bloom_latency_ms": 0.0239,
+        "parameters": {
+            "identity_filter": {
+                "capacity": 1000,
+                "items_inserted": 1000,
+                "target_error_rate": 0.001,
+                "bit_array_size_bits (m)": 14378,
+                "bit_array_size_bytes": 1798,
+                "bit_array_size_kb": 1.76,
+                "num_hash_functions (k)": 10,
+                "bits_set_ones": 7234,
+                "bit_fill_ratio": 0.5031,
+                "theoretical_fpr": 0.001039,
+                "bits_per_item": 14.38
+            },
+            "record_filter": {
+                "capacity": 10000,
+                "items_inserted": 10000,
+                "target_error_rate": 0.001,
+                "bit_array_size_bits (m)": 143776,
+                "bit_array_size_bytes": 17972,
+                "bit_array_size_kb": 17.55,
+                "num_hash_functions (k)": 10,
+                "bits_set_ones": 72173,
+                "bit_fill_ratio": 0.502,
+                "theoretical_fpr": 0.001016,
+                "bits_per_item": 14.38
+            },
+            "band_filter": {
+                "capacity": 53224,
+                "items_inserted": 53224,
+                "target_error_rate": 0.001,
+                "bit_array_size_bits (m)": 765233,
+                "bit_array_size_bytes": 95655,
+                "bit_array_size_kb": 93.41,
+                "num_hash_functions (k)": 10,
+                "bits_set_ones": 383599,
+                "bit_fill_ratio": 0.5013,
+                "theoretical_fpr": 0.001002,
+                "bits_per_item": 14.38
+            }
+        }
+    },
+    "performance_timing": {
+        "total_evaluation_time_sec": 4.057,
+        "avg_query_latency_ms": 8.01,
+        "throughput_queries_per_sec": 123.26,
+        "breakdown_ms_per_query": {
+            "bloom_filter_gating": 0.0239,
+            "minhash_signature": 7.51,
+            "lsh_candidate_search": 0.02,
+            "jaccard_ranking": 0.05
+        }
+    },
+    "lsh_index_efficiency": {
+        "avg_candidates_per_query": 3.89,
+        "lsh_candidate_recall_pct": 79.0
+    },
+    "retrieval_accuracy": {
+        "mrr": 0.79,
+        "map_at_10": 0.3894,
+        "hit_rate_pct": {
+            "Hit@1": 79.0,
+            "Hit@5": 79.0,
+            "Hit@10": 79.0
+        },
+        "precision": {
+            "P@1": 0.79,
+            "P@5": 0.5924,
+            "P@10": 0.3894
+        },
+        "recall": {
+            "R@1": 0.079,
+            "R@5": 0.2962,
+            "R@10": 0.3894
+        }
+    }
+}
