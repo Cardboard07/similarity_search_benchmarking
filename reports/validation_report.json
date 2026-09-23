@@ -1,0 +1,75 @@
+{
+  "count_comparison": {
+    "name": "minutiae_count",
+    "real_mean": 45.03,
+    "synthetic_mean": 45.496,
+    "real_std": 10.558555772452973,
+    "synthetic_std": 10.533184893468832,
+    "ks_statistic": 0.037,
+    "ks_p_value": 0.5005673707894058,
+    "wasserstein_distance": 0.5140000000000001,
+    "histogram_intersection": 0.9369999999999998
+  },
+  "nn_comparison": {
+    "name": "nearest_neighbor_distance",
+    "real_mean": 25.92812898014277,
+    "synthetic_mean": 26.79742799165065,
+    "real_std": 11.597020669775343,
+    "synthetic_std": 15.04472500758796,
+    "ks_statistic": 0.06778611554940556,
+    "ks_p_value": 7.354620903568822e-91,
+    "wasserstein_distance": 2.272444112489277,
+    "histogram_intersection": 0.8769357891683178
+  },
+  "pairwise_comparison": {
+    "name": "pairwise_distance",
+    "real_mean": 144.77991109680124,
+    "synthetic_mean": 155.04266949879994,
+    "real_std": 76.44481937625984,
+    "synthetic_std": 77.87138598717168,
+    "ks_statistic": 0.059833333333333405,
+    "ks_p_value": 4.01431068709995e-47,
+    "wasserstein_distance": 10.286025722790779,
+    "histogram_intersection": 0.9398666666666664
+  },
+  "type_comparison": {
+    "name": "minutiae_types",
+    "real_type1_ratio": 0.3975571840994892,
+    "synthetic_type1_ratio": 0.3982767715843151,
+    "chi2_statistic": 0.04711510940866248,
+    "p_value": 0.8281614680161289,
+    "jensen_shannon_divergence": 0.0005197735860588585
+  },
+  "angles_comparison": {
+    "name": "orientations",
+    "real_circular_mean_deg": 270.02523139719875,
+    "synthetic_circular_mean_deg": 335.06304931640625,
+    "real_circular_std_deg": 110.35372032989696,
+    "synthetic_circular_std_deg": 193.9447021484375,
+    "circular_histogram_overlap": 0.8539677209898673,
+    "jensen_shannon_divergence": 0.13560089931796968
+  },
+  "identity_preservation": {
+    "intra_match_rate_mean": 0.9618867611355986,
+    "intra_match_rate_std": 0.05504554119890417,
+    "intra_match_rate_min": 0.10256410256410256,
+    "inter_match_rate_mean": 0.15645872762313634,
+    "inter_match_rate_std": 0.0808525482377711,
+    "inter_match_rate_max": 0.4722222222222222,
+    "d_prime_separability": 11.644687517321866
+  },
+  "novelty_analysis": {
+    "num_evaluated": 100,
+    "all_novel": true,
+    "novel_percentage": 100.0,
+    "max_similarity_observed": 0.24489795918367346,
+    "mean_similarity_to_nearest": 0.16549257991242702,
+    "copy_threshold": 0.65
+  },
+  "success_criteria": {
+    "novelty_passed": true,
+    "statistical_count_passed": true,
+    "spatial_nn_passed": true,
+    "identity_preservation_passed": true
+  }
+}

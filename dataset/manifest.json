@@ -1,0 +1,370 @@
+{
+  "master_seed": 42,
+  "model_version": "1.0.0",
+  "updated_at": "2026-09-23T03:50:57.171657+00:00",
+  "total_observations": 6000000,
+  "total_identities": 400000,
+  "num_shards": 40,
+  "shards": [
+    {
+      "shard_id": 6,
+      "filename": "dataset_006.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 60001,
+      "identity_end": 70000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 3,
+      "filename": "dataset_003.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 30001,
+      "identity_end": 40000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 4,
+      "filename": "dataset_004.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 40001,
+      "identity_end": 50000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 1,
+      "filename": "dataset_001.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 10001,
+      "identity_end": 20000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 7,
+      "filename": "dataset_007.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 70001,
+      "identity_end": 80000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 0,
+      "filename": "dataset_000.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 1,
+      "identity_end": 10000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 2,
+      "filename": "dataset_002.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 20001,
+      "identity_end": 30000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 5,
+      "filename": "dataset_005.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 50001,
+      "identity_end": 60000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 8,
+      "filename": "dataset_008.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 80001,
+      "identity_end": 90000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 9,
+      "filename": "dataset_009.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 90001,
+      "identity_end": 100000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 11,
+      "filename": "dataset_011.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 110001,
+      "identity_end": 120000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 13,
+      "filename": "dataset_013.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 130001,
+      "identity_end": 140000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 10,
+      "filename": "dataset_010.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 100001,
+      "identity_end": 110000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 14,
+      "filename": "dataset_014.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 140001,
+      "identity_end": 150000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 12,
+      "filename": "dataset_012.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 120001,
+      "identity_end": 130000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 15,
+      "filename": "dataset_015.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 150001,
+      "identity_end": 160000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 16,
+      "filename": "dataset_016.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 160001,
+      "identity_end": 170000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 19,
+      "filename": "dataset_019.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 190001,
+      "identity_end": 200000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 17,
+      "filename": "dataset_017.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 170001,
+      "identity_end": 180000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 18,
+      "filename": "dataset_018.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 180001,
+      "identity_end": 190000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 20,
+      "filename": "dataset_020.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 200001,
+      "identity_end": 210000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 21,
+      "filename": "dataset_021.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 210001,
+      "identity_end": 220000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 22,
+      "filename": "dataset_022.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 220001,
+      "identity_end": 230000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 23,
+      "filename": "dataset_023.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 230001,
+      "identity_end": 240000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 24,
+      "filename": "dataset_024.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 240001,
+      "identity_end": 250000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 25,
+      "filename": "dataset_025.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 250001,
+      "identity_end": 260000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 27,
+      "filename": "dataset_027.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 270001,
+      "identity_end": 280000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 26,
+      "filename": "dataset_026.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 260001,
+      "identity_end": 270000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 28,
+      "filename": "dataset_028.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 280001,
+      "identity_end": 290000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 29,
+      "filename": "dataset_029.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 290001,
+      "identity_end": 300000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 30,
+      "filename": "dataset_030.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 300001,
+      "identity_end": 310000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 31,
+      "filename": "dataset_031.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 310001,
+      "identity_end": 320000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 32,
+      "filename": "dataset_032.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 320001,
+      "identity_end": 330000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 34,
+      "filename": "dataset_034.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 340001,
+      "identity_end": 350000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 33,
+      "filename": "dataset_033.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 330001,
+      "identity_end": 340000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 35,
+      "filename": "dataset_035.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 350001,
+      "identity_end": 360000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 36,
+      "filename": "dataset_036.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 360001,
+      "identity_end": 370000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 37,
+      "filename": "dataset_037.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 370001,
+      "identity_end": 380000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 38,
+      "filename": "dataset_038.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 380001,
+      "identity_end": 390000,
+      "status": "completed"
+    },
+    {
+      "shard_id": 39,
+      "filename": "dataset_039.h5",
+      "num_observations": 150000,
+      "num_identities": 10000,
+      "identity_start": 390001,
+      "identity_end": 400000,
+      "status": "completed"
+    }
+  ]
+}

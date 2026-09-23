@@ -1,0 +1,62 @@
+# Configuration for Statistical Synthetic Fingerprint-Minutiae Generation System
+
+dataset:
+  data_dir: "fingerprint_dataset/parsed_data"
+  image_size:
+    width: 416
+    height: 560
+  coordinate_bounds:
+    x_min: 10
+    x_max: 405
+    y_min: 10
+    y_max: 485
+  qualities:
+    3: "pristine"
+    7: "good"
+    5: "noisy"
+    1: "bad"
+    9: "very_bad"
+  orientations: [1, 2, 3]
+
+model_a:
+  minutiae_count:
+    method: "empirical" # "empirical" or "parametric"
+    clip_min: 15
+    clip_max: 110
+  spatial:
+    method: "poisson_inhibition" # "poisson_inhibition", "adaptive_kde", "gmm"
+    min_separation: 8.5 # pixels minimum separation
+    rejection_retries: 50
+    grid_res: [104, 140]
+  orientation:
+    poly_order: 4
+    residual_distribution: "von_mises" # or "wrapped_normal"
+  type:
+    method: "spatial_conditional" # "spatial_conditional" or "global_ratio"
+
+model_b:
+  angle:
+    affine: true
+    smooth_deformation: true
+    tps_regularization: 0.1
+    deformation_scale: 1.0
+  quality:
+    use_spatial_field: true
+    field_correlation_length: 50.0
+
+storage:
+  max_minutiae: 128
+  num_features: 5 # x, y, angle, type, quality
+  compression: "lzf"
+  chunk_size: 1000
+  shard_size: 100000 # samples per shard
+  manifest_filename: "manifest.json"
+
+generation:
+  batch_size: 1000
+  default_seed: 42
+
+validation:
+  significance_level: 0.05
+  ks_alpha: 0.05
+  sample_size_scale_val: 100000

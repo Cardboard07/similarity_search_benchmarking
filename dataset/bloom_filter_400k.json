@@ -1,0 +1,7 @@
+{
+  "capacity": 400000,
+  "target_error_rate": 0.001,
+  "m": 5751036,
+  "k": 10,
+  "count": 400000
+}

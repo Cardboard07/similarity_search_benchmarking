@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.so
 .ipynb_checkpoints/
+.pytest_cache/
 
 # Virtual environments
 .env
@@ -11,9 +12,22 @@ __pycache__/
 env/
 venv/
 
-# Ignore contents of fingerprint_dataset but keep directory
-fingerprint_dataset/*
-!fingerprint_dataset/.gitkeep
+# Large datasets, binary structures, and model weights
+*.h5
+*.hdf5
+*.bin
+*.pkl
+*.npy
+*.npz
+
+# Ignore contents of fingerprint_dataset
+fingerprint_dataset/
+
+# Large dataset shards and signature outputs
+dataset/*.h5
+dataset/*.bin
+dataset/signatures_shards/
+!dataset/manifest.json
 
 # Ignore contents of data_structure but keep directory
 **/data_structure/*
