@@ -23,19 +23,19 @@ class AngleModel:
     def __init__(
         self,
         correlation_length: float = 90.0,
-        deformation_magnitude: float = 1.2
+        deformation_magnitude: float = 0.0
     ):
         self.correlation_length = correlation_length
         self.deformation_magnitude = deformation_magnitude
         
         # Rigid parameters learned from real paired impressions
-        self.tx_std = 0.8
-        self.ty_std = 0.8
-        self.rot_std_deg = 0.2
-        self.scale_std = 0.001
+        self.tx_std = 0.81
+        self.ty_std = 0.88
+        self.rot_std_deg = 0.016
+        self.scale_std = 0.00015
         
-        # Angular residual noise
-        self.residual_kappa = 25.0
+        # Angular residual noise (in real data, residual angle difference has kappa > 100,000)
+        self.residual_kappa = 120000.0
 
     def fit(self, correspondence_results: list[CorrespondenceResult]) -> "AngleModel":
         """
@@ -51,14 +51,14 @@ class AngleModel:
                 ang_diffs.extend(r.angular_differences)
 
         if len(tx_vals) > 0:
-            self.tx_std = float(max(np.std(tx_vals), 0.1))
-            self.ty_std = float(max(np.std(ty_vals), 0.1))
-            self.rot_std_deg = float(max(np.std(rot_vals), 0.05))
-            self.scale_std = float(max(np.std(scale_vals), 0.0005))
+            self.tx_std = float(max(np.std(tx_vals), 0.05))
+            self.ty_std = float(max(np.std(ty_vals), 0.05))
+            self.rot_std_deg = float(max(np.std(rot_vals), 0.005))
+            self.scale_std = float(max(np.std(scale_vals), 0.00005))
             
         if len(ang_diffs) > 0:
             _, kappa = fit_von_mises(np.array(ang_diffs))
-            self.residual_kappa = float(np.clip(kappa, 10.0, 60.0))
+            self.residual_kappa = float(np.clip(kappa, 1000.0, 200000.0))
 
         return self
 
@@ -100,25 +100,28 @@ class AngleModel:
         rigid_pts = scale * (centered @ R.T) + center + np.array([tx, ty])
 
         # 2. Smooth spatially-correlated elastic deformation D(x, y)
-        # Using Gaussian Random Field / RBF basis deformation
-        n_ctrl = 6
-        ctrl_x = np.linspace(20, 396, n_ctrl)
-        ctrl_y = np.linspace(20, 470, n_ctrl)
-        grid_x, grid_y = np.meshgrid(ctrl_x, ctrl_y)
-        ctrl_pts = np.column_stack([grid_x.flatten(), grid_y.flatten()])
-        
-        # Sample random control point displacements
-        ctrl_disp = rng.normal(0.0, self.deformation_magnitude, size=ctrl_pts.shape)
-        
-        # Gaussian kernel weights
-        # dist: [N, n_ctrl*n_ctrl]
-        from scipy.spatial.distance import cdist
-        dmat = cdist(pts, ctrl_pts)
-        weights = np.exp(-0.5 * (dmat / self.correlation_length)**2)
-        weights_sum = np.sum(weights, axis=1, keepdims=True) + 1e-12
-        smooth_disp = (weights @ ctrl_disp) / weights_sum
-        
-        deformed_pts = rigid_pts + smooth_disp
+        if self.deformation_magnitude > 0.001:
+            n_ctrl = 6
+            ctrl_x = np.linspace(20, 396, n_ctrl)
+            ctrl_y = np.linspace(20, 470, n_ctrl)
+            grid_x, grid_y = np.meshgrid(ctrl_x, ctrl_y)
+            ctrl_pts = np.column_stack([grid_x.flatten(), grid_y.flatten()])
+            
+            # Sample random control point displacements
+            ctrl_disp = rng.normal(0.0, self.deformation_magnitude, size=ctrl_pts.shape)
+            
+            # Gaussian kernel weights
+            from scipy.spatial.distance import cdist
+            dmat = cdist(pts, ctrl_pts)
+            weights = np.exp(-0.5 * (dmat / self.correlation_length)**2)
+            weights_sum = np.sum(weights, axis=1, keepdims=True) + 1e-12
+            smooth_disp = (weights @ ctrl_disp) / weights_sum
+            
+            deformed_pts = rigid_pts + smooth_disp
+            def_energy = float(np.mean(np.linalg.norm(smooth_disp, axis=1)))
+        else:
+            deformed_pts = rigid_pts
+            def_energy = 0.0
         
         # Clip to valid bounding box
         deformed_pts[:, 0] = np.clip(deformed_pts[:, 0], 10.0, 405.0)
@@ -134,7 +137,6 @@ class AngleModel:
         bin_step = 360.0 / 256.0
         final_angles = np.round(final_angles / bin_step) * bin_step % 360.0
 
-        def_energy = float(np.mean(np.linalg.norm(smooth_disp, axis=1)))
         params = TransformationParameters(
             tx=tx,
             ty=ty,

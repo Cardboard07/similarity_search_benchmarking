@@ -207,8 +207,8 @@ class DatasetCalibrator:
         for q in [7, 5, 1, 9]:
             q_surv = []
             q_false = []
-            q_pos_err = []
-            q_ang_err = []
+            q_pos_diffs = []
+            q_ang_diffs = []
             
             # Sample across identities
             for ident in range(1, 1001):
@@ -226,15 +226,22 @@ class DatasetCalibrator:
                     q_surv.append(res.survival_rate)
                     q_false.append(res.false_minutiae_count)
                     if len(res.spatial_distances) > 0:
-                        q_pos_err.append(np.mean(res.spatial_distances))
+                        q_pos_diffs.extend(res.spatial_distances)
                     if len(res.angular_differences) > 0:
-                        q_ang_err.append(np.mean(res.angular_differences))
+                        q_ang_diffs.extend(res.angular_differences)
+
+            pos_arr = np.array(q_pos_diffs)
+            ang_arr = np.array(q_ang_diffs)
+            pos_std = float(np.mean(pos_arr) / np.sqrt(np.pi / 2.0)) if len(pos_arr) > 0 else 1.2
+            _, kappa = fit_von_mises(ang_arr) if len(ang_arr) > 0 else (0.0, 1000.0)
 
             quality_stats[q] = {
                 'surv': float(np.mean(q_surv)),
                 'false': float(np.mean(q_false)),
-                'pos_err': float(np.mean(q_pos_err)) if q_pos_err else 0.0,
-                'ang_err': float(np.mean(q_ang_err)) if q_ang_err else 0.0
+                'pos_noise_std': pos_std,
+                'pos_err_mean': float(np.mean(pos_arr)) if len(pos_arr) > 0 else 0.0,
+                'ang_err_mean': float(np.mean(ang_arr)) if len(ang_arr) > 0 else 0.0,
+                'fitted_kappa': float(kappa)
             }
 
         return {

@@ -1,63 +1,146 @@
 {
     "dataset_summary": {
-        "total_queries_evaluated": 100,
-        "queries_with_ground_truth_in_db": 100,
-        "gallery_size": 4000000
+        "total_queries_evaluated": 2500,
+        "queries_with_ground_truth_in_db": 2500,
+        "gallery_size": 4000000,
+        "unique_identities_in_gallery": 400000,
+        "hyperparameters": {
+            "bands": 16,
+            "rows": 4,
+            "theoretical_lsh_threshold": 0.5,
+            "decision_threshold_tau": 0.4
+        }
     },
     "bloom_filter_summary": {
         "enabled": true,
-        "queries_screened": 100,
-        "queries_passed_filter": 100,
+        "queries_screened": 2500,
+        "queries_passed_filter": 2500,
         "queries_pruned_before_search": 0,
         "false_negatives": 0,
         "false_negative_rate_pct": 0.0,
-        "avg_bloom_latency_ms": 0.0336,
-        "parameters": {
-            "capacity": 400000,
-            "items_inserted": 400000,
-            "target_error_rate": 0.001,
-            "bit_array_size_bits (m)": 5751036,
-            "bit_array_size_bytes": 718880,
-            "bit_array_size_kb": 702.03,
-            "num_hash_functions (k)": 10,
-            "bits_set_ones": 2881823,
-            "bit_fill_ratio": 0.5011,
-            "theoretical_fpr": 0.000998,
-            "bits_per_item": 14.38
-        }
-    },
-    "performance_timing": {
-        "total_evaluation_time_sec": 4.124,
-        "avg_query_latency_ms": 37.449,
-        "throughput_queries_per_sec": 24.3,
-        "breakdown_ms_per_query": {
-            "bloom_filter_gating": 0.0336,
-            "lsh_candidate_search": 8.5746,
-            "jaccard_ranking": 28.839
-        }
+        "avg_bloom_latency_ms": 0.0376
     },
     "lsh_index_efficiency": {
-        "avg_candidates_per_query": 30713.53,
-        "candidate_pruning_ratio_pct": 99.232,
-        "lsh_candidate_recall_pct": 96.0
+        "gallery_size": 4000000,
+        "indexing_time_sec": 24.59,
+        "indexing_throughput_records_per_sec": 162695.2,
+        "avg_candidates_per_query": 34.57,
+        "candidate_pruning_ratio_pct": 99.9991,
+        "lsh_candidate_recall_pct": 99.92,
+        "lsh_false_negatives": 2
     },
     "retrieval_accuracy": {
-        "mrr": 0.6227,
-        "map_at_10": 0.181,
-        "hit_rate_pct": {
-            "Hit@1": 58.0,
-            "Hit@5": 67.0,
-            "Hit@10": 73.0
+        "mrr": 0.9988,
+        "map_at_k": 0.9181,
+        "overall_hit_rate_pct": 99.92,
+        "overall_precision": 0.918,
+        "overall_recall": 0.918,
+        "total_false_negatives": 2,
+        "hit_at_k": {
+            "Hit@1": 99.84,
+            "Hit@5": 99.92,
+            "Hit@10": 99.92,
+            "Hit@20": 99.92,
+            "Hit@50": 99.92
         },
-        "precision": {
-            "P@1": 0.58,
-            "P@5": 0.338,
-            "P@10": 0.214
+        "precision_at_k": {
+            "P@1": 0.9984,
+            "P@5": 0.9912,
+            "P@10": 0.918,
+            "P@20": 0.4595,
+            "P@50": 0.1838
         },
-        "recall": {
-            "R@1": 0.058,
-            "R@5": 0.169,
-            "R@10": 0.214
+        "recall_at_k": {
+            "R@1": 0.0998,
+            "R@5": 0.4956,
+            "R@10": 0.918,
+            "R@20": 0.9189,
+            "R@50": 0.9189
+        }
+    },
+    "decision_threshold_metrics": {
+        "threshold_tau": 0.4,
+        "true_positives": 22920,
+        "false_positives": 48,
+        "hit_rate_at_threshold_pct": 99.92,
+        "avg_recall_at_threshold": 0.9168,
+        "avg_precision_at_threshold": 0.999
+    },
+    "quality_breakdown": {
+        "q_1": {
+            "quality_level": 1,
+            "queries_evaluated": 500,
+            "zero_recall_failures": 0,
+            "zero_recall_failure_rate_pct": 0.0,
+            "hit_at_10_pct": 100.0,
+            "precision_at_10": 0.898,
+            "recall_at_10": 0.898,
+            "mrr": 1.0,
+            "map_at_10": 0.8982,
+            "avg_candidates": 32.19
+        },
+        "q_3": {
+            "quality_level": 3,
+            "queries_evaluated": 500,
+            "zero_recall_failures": 0,
+            "zero_recall_failure_rate_pct": 0.0,
+            "hit_at_10_pct": 100.0,
+            "precision_at_10": 0.981,
+            "recall_at_10": 0.981,
+            "mrr": 1.0,
+            "map_at_10": 0.9812,
+            "avg_candidates": 34.76
+        },
+        "q_5": {
+            "quality_level": 5,
+            "queries_evaluated": 500,
+            "zero_recall_failures": 1,
+            "zero_recall_failure_rate_pct": 0.2,
+            "hit_at_10_pct": 99.8,
+            "precision_at_10": 0.903,
+            "recall_at_10": 0.903,
+            "mrr": 0.997,
+            "map_at_10": 0.9029,
+            "avg_candidates": 33.07
+        },
+        "q_7": {
+            "quality_level": 7,
+            "queries_evaluated": 500,
+            "zero_recall_failures": 0,
+            "zero_recall_failure_rate_pct": 0.0,
+            "hit_at_10_pct": 100.0,
+            "precision_at_10": 0.9176,
+            "recall_at_10": 0.9176,
+            "mrr": 1.0,
+            "map_at_10": 0.9178,
+            "avg_candidates": 41.17
+        },
+        "q_9": {
+            "quality_level": 9,
+            "queries_evaluated": 500,
+            "zero_recall_failures": 1,
+            "zero_recall_failure_rate_pct": 0.2,
+            "hit_at_10_pct": 99.8,
+            "precision_at_10": 0.8904,
+            "recall_at_10": 0.8904,
+            "mrr": 0.997,
+            "map_at_10": 0.8904,
+            "avg_candidates": 31.64
+        }
+    },
+    "latency_profile": {
+        "total_evaluation_time_sec": 2.42,
+        "throughput_qps": 1033.0,
+        "avg_latency_ms": 0.884,
+        "p50_latency_ms": 0.725,
+        "p90_latency_ms": 1.47,
+        "p99_latency_ms": 2.83,
+        "min_latency_ms": 0.348,
+        "max_latency_ms": 5.003,
+        "breakdown_ms_per_query": {
+            "bloom_filter_gating": 0.0376,
+            "lsh_candidate_search": 0.6527,
+            "jaccard_scoring_ranking": 0.1761
         }
     }
 }

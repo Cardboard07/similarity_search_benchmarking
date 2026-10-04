@@ -19,30 +19,49 @@ class ScaledLSHIndex:
         if self.bands * self.rows > 64:
             raise ValueError(f"bands * rows ({self.bands * self.rows}) exceeds signature length 64.")
 
-        # Inverted index: list of dictionaries, one per band
-        # band_tables[i]: maps band_tuple -> list of int32 record indices
-        self.band_tables: List[Dict[Tuple[int, ...], List[int]]] = [{} for _ in range(self.bands)]
+        # Sorted array index for million-scale low-memory fast search
+        self.sorted_keys: List[np.ndarray] = []
+        self.sorted_indices: List[np.ndarray] = []
         self.num_indexed: int = 0
+        self._fnv_mult = int(0x517cc1b727220a95)
+
+    @staticmethod
+    def _hash_band_vectorized(band_slice: np.ndarray, mult: int) -> np.ndarray:
+        n, r = band_slice.shape
+        keys = np.zeros(n, dtype=np.uint64)
+        mask = 0xFFFFFFFFFFFFFFFF
+        for col in range(r):
+            # Vectorized 64-bit linear congruential hash
+            c_val = band_slice[:, col].astype(np.uint64)
+            keys = (keys ^ c_val) * np.uint64(mult)
+        return keys
+
+    @staticmethod
+    def _hash_band_single(band_slice: np.ndarray, mult: int) -> np.uint64:
+        key = 0
+        mask = 0xFFFFFFFFFFFFFFFF
+        for v in band_slice:
+            key = ((key ^ int(v)) * mult) & mask
+        return np.uint64(key)
 
     def index_signatures(self, signatures: np.ndarray, start_idx: int = 0) -> None:
         """
-        Indexes a batch or full array of signatures.
+        Indexes a full array of signatures using vectorized hashing and argsort.
         signatures: Shape (N, 64) array of uint32 signatures.
         start_idx: Global offset index for the batch.
         """
         n_samples = len(signatures)
         rows = self.rows
 
+        self.sorted_keys = []
+        self.sorted_indices = []
+
         for b in range(self.bands):
-            table = self.band_tables[b]
             band_slice = signatures[:, b * rows : (b + 1) * rows]
-            for i in range(n_samples):
-                key = tuple(band_slice[i])
-                idx = start_idx + i
-                if key in table:
-                    table[key].append(idx)
-                else:
-                    table[key] = [idx]
+            keys = self._hash_band_vectorized(band_slice, self._fnv_mult)
+            order = np.argsort(keys)
+            self.sorted_keys.append(keys[order])
+            self.sorted_indices.append((order + start_idx).astype(np.int32))
 
         self.num_indexed += n_samples
 
@@ -60,14 +79,18 @@ class ScaledLSHIndex:
         rows = self.rows
 
         for b in range(self.bands):
-            table = self.band_tables[b]
-            key = tuple(sig[b * rows : (b + 1) * rows])
-            bucket = table.get(key)
-            if bucket:
-                for idx in bucket:
-                    if idx not in seen:
-                        seen.add(idx)
-                        candidates.append(idx)
+            b_slice = sig[b * rows : (b + 1) * rows]
+            q_key = self._hash_band_single(b_slice, self._fnv_mult)
+            keys_arr = self.sorted_keys[b]
+            l = int(np.searchsorted(keys_arr, q_key, side='left'))
+            r = int(np.searchsorted(keys_arr, q_key, side='right'))
+            if l < r:
+                idxs = self.sorted_indices[b][l:r]
+                for idx in idxs:
+                    i = int(idx)
+                    if i not in seen:
+                        seen.add(i)
+                        candidates.append(i)
 
         return candidates
 
