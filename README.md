@@ -1,54 +1,67 @@
 # Biometric Fingerprint Duplicate Detection System
-### Large-Scale Biometric Retrieval via Bloom Filter Gating, MinHash Signatures, and Locality-Sensitive Hashing (LSH)
+### Large-Scale Biometric Retrieval via LSH-Band Pre-Filtering, Vectorized MinHash Signatures, and Sorted-Array Locality-Sensitive Hashing (LSH)
 
-A high-performance biometric fingerprint duplicate detection and 1:N retrieval system. Given an arbitrary query fingerprint observation (minutiae point set), the system rapidly identifies all related observations belonging to the same identity across millions of gallery records, while short-circuiting non-existent queries in microseconds.
+A high-performance biometric fingerprint duplicate detection and 1:N retrieval system. Given an arbitrary query fingerprint observation (raw minutiae point set), the system rapidly identifies all related observations belonging to the same identity across millions of gallery records, while short-circuiting non-existent queries in microseconds without leaking ground-truth identity metadata.
 
-This document presents the complete system architecture, mathematical derivations, and empirical results across two benchmarks:
-1. **Small-Scale Experiment**: 15,000 observations across 1,000 identities (JSON records).
+This document presents the complete system architecture, mathematical formulations, and empirical results across two benchmarks:
+1. **Small-Scale Baseline**: 15,000 observations across 1,000 identities (JSON records).
 2. **Large-Scale Experiment**: **6,000,000 observations across 400,000 identities** (40 HDF5 shards).
 
-The large-scale benchmark consists of three phases:
-- **Phase 1**: LSH hyperparameter tuning sweep on 20k identities (200k gallery).
-- **Phase 2**: Full 6M standard metrics evaluation with optimal hyperparameters.
-- **Phase 3**: 4-way architectural latency and accuracy comparison at full 4M gallery scale.
+The large-scale benchmark consists of four empirical evaluations:
+- **Band Pre-filter Sweep**: Exploration across 9 LSH band configurations to minimize false negatives and candidate load.
+- **Phase 1**: Slider tuning and recall analysis on 20k identities (200k gallery) with runtime probe signatures.
+- **Phase 2**: Full 6M standard metrics evaluation (4M gallery, 2,500 runtime probes across 5 quality levels).
+- **Phase 3**: 4-way architectural latency and accuracy comparison at full 4M gallery scale across positive, negative, and mixed workloads.
 
 ---
 
 ## 1. System Architecture & General Working
 
-The end-to-end retrieval pipeline decouples biometric duplicate search into four hierarchical stages designed for sub-linear search complexity:
+The end-to-end retrieval pipeline decouples biometric duplicate search into five hierarchical stages designed for sub-linear search complexity and strict zero-leakage retrieval:
 
 ```
-                          [ Query Fingerprint Minutiae ]
-                                        │
-                                        ▼
-                         ┌─────────────────────────────┐
-                         │     Bloom Filter Gating     │
-                         │    (400,000 Identities)     │
-                         └──────────────┬──────────────┘
-                                        │
-                      ┌─────────────────┴─────────────────┐
-                      ▼                                   ▼
-             [ Definite Negative ]               [ Probable Positive ]
-             Abort Query (< 14 µs)                         │
-             Zero Search Cost                              ▼
-                                             ┌───────────────────────────┐
-                                             │  Vectorized MinHash Engine│
-                                             │  (64 Integer Hash Signatures)
-                                             └─────────────┬─────────────┘
-                                                           │
-                                                           ▼
-                                             ┌───────────────────────────┐
-                                             │   LSH Sorted-Array Index  │
-                                             │   (16 Bands x 4 Rows)     │
-                                             │  Prunes 99.9991% of 4M    │
-                                             └─────────────┬─────────────┘
-                                                           │
-                                                           ▼
-                                             ┌───────────────────────────┐
-                                             │  Candidate Jaccard Rank   │
-                                             │  Top-K Duplicate Matches  │
-                                             └───────────────────────────┘
+                          [ Query Raw Minutiae Points ]
+                          (x_i, y_i, θ_i, type_i)_{i=1}^N
+                                         │
+                                         ▼
+                     ┌───────────────────────────────────────┐
+                     │ Stage 1: Relative Minutiae Tokenizer  │
+                     │  - Spatial k-NN Topological Encoding  │
+                     │  - Translation & Rotation Invariant   │
+                     └───────────────────┬───────────────────┘
+                                         │
+                                         ▼
+                     ┌───────────────────────────────────────┐
+                     │ Stage 2: Dynamic MinHash Derivation   │
+                     │  - Vectorized Modular Hashing (p)     │
+                     │  - 64-dim Integer Signature at Query  │
+                     └───────────────────┬───────────────────┘
+                                         │
+                                         ▼
+                     ┌───────────────────────────────────────┐
+                     │ Stage 3: LSH-Band Pre-Filter Gating   │
+                     │  - 16 Band Key-Sets from LSH Index    │
+                     │  - Pure Minutiae Biometric Screening  │
+                     └───────────────────┬───────────────────┘
+                                         │
+                       ┌─────────────────┴─────────────────┐
+                       ▼                                   ▼
+              [ Definite Negative ]               [ Probable Positive ]
+              Abort Query (< 0.12 ms)                       │
+              Zero Candidate Cost                           ▼
+                                             ┌─────────────────────────────┐
+                                             │ Stage 4: Sorted-Array LSH   │
+                                             │  - 16 Bands x 4 Rows        │
+                                             │  - np.searchsorted Binary   │
+                                             │  - Prunes 99.9991% of 4M    │
+                                             └──────────────┬──────────────┘
+                                                            │
+                                                            ▼
+                                             ┌─────────────────────────────┐
+                                             │ Stage 5: Candidate Scoring  │
+                                             │  - Fraction Matching Pos    │
+                                             │  - Top-K Duplicate Matches  │
+                                             └─────────────────────────────┘
 ```
 
 ### Stage 1: Topological Minutiae Relative Tokenizer
@@ -59,7 +72,7 @@ Raw minutiae point sets $M = \{(x_i, y_i, \theta_i, \text{type}_i)\}_{i=1}^N$ va
   where $d_{i,j} = \|(x_j - x_i, y_j - y_i)\|_2$, $\phi_{i,j}^{\text{rel}} = (\text{atan2}(y_j - y_i, x_j - x_i) - \theta_i) \pmod{360^\circ}$, and $\Delta \theta_{i,j} = (\theta_j - \theta_i) \pmod{360^\circ}$.
 - This relative geometry representation is strictly invariant to global displacement and global orientation.
 
-### Stage 2: MinHash Signature Derivation
+### Stage 2: Dynamic MinHash Signature Derivation (Runtime Computation)
 Each token $\tau$ is mapped to a 64-bit integer $x = \text{Blake2b}(\tau)$. To compress variable-sized token sets into fixed-length signatures, a family of $D = 64$ linear congruential hash functions is applied:
 $$h_d(x) = (a_d \cdot x + b_d) \pmod p, \quad d \in \{1, \dots, D\}$$
 where $p = 4{,}294{,}967{,}311$ (prime modulus $2^{32} - 5$), and $a_d, b_d$ are random coefficients. The MinHash signature is:
@@ -69,345 +82,332 @@ $$P(s(M_A)_d = s(M_B)_d) = J(\text{Tokens}(M_A), \text{Tokens}(M_B))$$
 
 To prevent 64-bit scalar multiplication overflow in vectorized execution, modular reduction is pre-applied:
 $$(a_d \cdot x + b_d) \pmod p = \left(a_d \cdot (x \pmod p) + b_d\right) \pmod p$$
-guaranteeing exact mathematical equivalence while operating at **0.26 ms per observation** (**30x faster** than iterative hashing).
+guaranteeing exact mathematical equivalence.
+> **Note on Runtime Computation**: In all experiments, probe signatures are **never pre-computed or loaded from disk**. Every probe query begins with raw minutiae points and executes dynamic relative tokenization + modular MinHash at runtime (~1.4 ms), fully included in reported latencies.
 
-### Stage 3: Probabilistic Bloom Filter Gating
-Before querying the index or evaluating candidates, the query identity is tested against a pre-search **Bloom Filter**:
-- Utilizes Kirsch-Mitzenmacher double-hashing optimization to evaluate $k=10$ hash indices:
-  $$g_i(x) = \left(h_1(x) + i \cdot h_2(x)\right) \pmod m, \quad i \in \{0, \dots, k-1\}$$
-- If any bit is 0, the identity is **definitively not in the database** (zero false negatives). The query aborts immediately in **$< 14\,\mu\text{s}$**, saving 100% of search compute.
-- If all bits are 1, the query proceeds to candidate retrieval with a false positive rate $\le 0.1\%$.
+### Stage 3: LSH-Band Key-Set Pre-Filter Gating
+To prevent ground-truth identity leakage (which occurred in naive Bloom filters that indexed query identity IDs), the system employs an internal **LSH-Band Key-Set Pre-Filter**:
+- The LSH index constructs a set of active bucket keys for each band: $\mathcal{K}_b = \{ \text{hash}(\text{band}_b(s_g)) \mid s_g \in \text{Gallery} \}$.
+- Given a query signature $s_q$, the pre-filter checks if:
+  $$\exists b \in \{0, \dots, B-1\} \quad \text{such that} \quad \text{hash}(\text{band}_b(s_q)) \in \mathcal{K}_b$$
+- If **none** of the query's $B$ band keys exist in the gallery index, the fingerprint cannot match any gallery record through LSH. The query aborts immediately in **$< 0.042\,\text{ms}$**, saving 100% of candidate allocation and scoring compute.
+- Operates purely on minutiae hash signatures—no identity IDs, metadata, or ground truth are accessed.
 
 ### Stage 4: Locality-Sensitive Hashing (LSH) — Sorted-Array Index
 The 64-integer signature is partitioned into $b$ bands of $r$ rows ($b \times r = 64$).
-- Each band is hashed using a vectorized FNV-1a-style 64-bit hash into integer keys stored in a **sorted numpy array** (replacing Python dicts for 3.5x lower RAM and 9.4x faster indexing).
+- Each band is hashed using a vectorized FNV-1a-style 64-bit hash into integer keys stored in a **sorted numpy array** (replacing Python dicts for 3.5× lower RAM and 9.4× faster indexing).
 - Two fingerprints become candidates if their sub-signatures match in **at least one band**.
-- The probability of candidate collision as a function of Jaccard similarity $s$ follows an S-curve:
+- The probability of candidate collision as a function of similarity $s$ follows an S-curve:
   $$P(\text{Candidate Collision}) = 1 - (1 - s^r)^b$$
 - Approximation threshold: $t \approx (1/b)^{1/r}$.
 
-### Stage 5: Candidate Verification & Jaccard Scoring
-For all unique candidates retrieved across matching band buckets, Jaccard similarity is evaluated against the query signature, producing ranked duplicate candidates.
+### Stage 5: MinHash Verification & Candidate Scoring
+For all unique candidates retrieved across matching band buckets, similarity is evaluated strictly using the **fraction-of-matching-positions** metric:
+$$\text{Sim}(s_q, s_g) = \frac{1}{D} \sum_{d=1}^D \mathbb{I}[s_{q,d} = s_{g,d}]$$
+This is the direct unbiased estimator of the Jaccard similarity under the MinHash Theorem. Candidates are ranked, and the top-$K$ matches exceeding decision threshold $\tau = 0.40$ are output.
 
 ---
 
-## 2. Experimental Datasets
+## 2. Experimental Datasets & Randomized Split
 
 | Dimension | Small-Scale Baseline | Large-Scale (6M) |
 | :--- | :--- | :--- |
-| **Storage Medium** | Individual JSON files | 40 HDF5 shards (`signatures_000.h5` - `signatures_039.h5`) |
+| **Storage Medium** | Individual JSON files | 40 HDF5 shards (`dataset_000.h5` - `dataset_039.h5`) |
 | **Total Observations** | 15,000 observations | **6,000,000 observations** |
 | **Total Unique Identities** | 1,000 identities | **400,000 identities** (4 Lakh) |
 | **Observations per Identity** | 15 (3 orientations × 5 qualities) | 15 (3 orientations × 5 qualities) |
 | **Gallery Size (Train)** | 10,000 records | **4,000,000 records** (10 obs / identity) |
 | **Probe Size (Test)** | 4,500 records | **2,000,000 records** (5 obs / identity) |
-| **Signature Storage** | `signatures.json` (15.5 MB) | 40 HDF5 shards (1.10 GB, LZF compressed) |
-| **Bloom Filter Capacity** | $n = 1,000$ identities (1.76 KB RAM) | **$n = 400,000$ identities (702 KB RAM)** |
-| **LSH Configuration** | $b = 8$, $r = 8$ ($t \approx 0.77$) | **$b = 16$, $r = 4$ ($t = 0.50$)** |
+| **Probe Signature Evaluation** | Pre-computed | **Runtime Dynamic MinHash from Raw Minutiae** |
+| **Data Split Strategy** | Orientation split (1,2 vs 3) | **Randomized Per-Identity Split** (`seed=42`, $2/3$ gallery, $1/3$ probe) |
+| **Similarity Metric** | Set Jaccard | **Fraction of Matching Positions ($\frac{1}{D}\sum \mathbb{I}[s_A = s_B]$)** |
+| **Pre-Filter Architecture** | Identity Bloom Filter | **Biometric LSH-Band Key-Set Filter (Zero Metadata Leakage)** |
+| **LSH Configuration** | $b = 8$, $r = 8$ ($t \approx 0.77$) | **$b = 16$, $r = 4$ ($t = 0.50$, $\tau = 0.40$)** |
+
+### Randomized Train/Test Split Methodology
+In earlier iterations, the train/test split was hardcoded by orientation (orientations 1 & 2 in Gallery, orientation 3 in Probes). To eliminate synthetic orientation bias and properly reflect operational conditions:
+- Each identity has 15 observations comprising combinations of 3 global orientations and 5 quality levels (`q1`, `q3`, `q5`, `q7`, `q9`).
+- Using a deterministic seed (`seed=42`), **exactly 10 observations per identity are randomly sampled for the Gallery (4,000,000 total)**, and **5 observations are assigned to Probes (2,000,000 total)**.
+- Every orientation and quality level is represented in both gallery and probe sets, rigorously evaluating cross-orientation and cross-quality duplicate retrieval.
 
 ---
 
-## 3. Phase 1 — LSH Hyperparameter Tuning (20k Identities, 200k Gallery)
+## 3. LSH-Band Pre-Filter Parameter Sweep Experiment
 
-A sweep across 9 `(bands, rows)` configurations was run using 500 balanced probes on 20,000 identities (200,000 gallery records). The goal was to find the minimum candidate load that guarantees 100% recall before scaling to 6M.
+To determine the optimal band partitioning $(b, r)$ that minimizes false negatives while keeping candidate volume negligible, a parameter sweep was executed across 9 configurations using 500 balanced probes on 200,000 gallery records. All probe signatures were computed dynamically at runtime.
 
-| Bands (b) | Rows (r) | Threshold (t) | Avg Candidates | Hit@10 | Candidate Precision | Latency (ms) |
-|:---------:|:--------:|:-------------:|:--------------:|:------:|:-------------------:|:------------:|
-| 4         | 16       | 0.917         | 0.8            | 31.6%  | 31.60%              | 0.09         |
-| 6         | 10       | 0.836         | 2.3            | 61.6%  | 61.60%              | 0.16         |
-| 8         | 8        | 0.771         | 3.8            | 81.2%  | 81.20%              | 0.23         |
-| 10        | 6        | 0.681         | 6.1            | 94.0%  | 94.00%              | 0.20         |
-| 12        | 5        | 0.608         | 7.7            | 98.6%  | 98.47%              | 0.24         |
-| **16**    | **4**    | **0.500**     | **10.4**       | **100.0%** | **93.73%**     | **0.28**     |
-| 20        | 3        | 0.368         | 57.1           | 100.0% | 34.03%              | 0.47         |
-| 32        | 2        | 0.177         | 2,593.6        | 100.0% | 0.62%               | 3.23         |
-| 64        | 1        | 0.016         | 113,293.9      | 100.0% | 0.009%              | 172.64       |
+| Bands ($b$) | Rows ($r$) | Threshold ($t$) | Pre-filter Accepted | Pre-filter Rejected | Pre-filter FN Rate | Avg Candidates | Pruning % | Hit@10 % | MRR | Latency (ms) | Pre-filter (ms) |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| 4 | 16 | 0.917 | 148 | 352 | 70.4% | 2.31 | 99.9988% | 29.6% | 0.296 | 1.595 | 0.0490 |
+| 6 | 10 | 0.836 | 305 | 195 | 39.0% | 3.49 | 99.9983% | 61.0% | 0.610 | 1.598 | 0.0570 |
+| 8 | 8 | 0.771 | 398 | 102 | 20.4% | 4.77 | 99.9976% | 79.6% | 0.796 | 1.592 | 0.0551 |
+| 10 | 6 | 0.681 | 472 | 28 | 5.6% | 6.47 | 99.9968% | 94.4% | 0.944 | 1.609 | 0.0422 |
+| 12 | 5 | 0.608 | 492 | 8 | 1.6% | 7.90 | 99.9961% | 98.4% | 0.984 | 1.621 | 0.0314 |
+| **16** | **4** | **0.500** | **500** | **0** | **0.000%** | **10.34** | **99.9948%** | **100.0%** | **1.0000** | **1.850** | **0.0308** |
+| 20 | 3 | 0.368 | 500 | 0 | 0.000% | 55.12 | 99.9724% | 100.0% | 1.0000 | 1.837 | 0.0207 |
+| 32 | 2 | 0.177 | 500 | 0 | 0.000% | 2,427.14 | 98.7864% | 100.0% | 1.0000 | 6.070 | 0.0244 |
+| 64 | 1 | 0.016 | 500 | 0 | 0.000% | 112,726.32 | 43.6368% | 100.0% | 1.0000 | 254.935 | 0.0315 |
 
-### Optimal Hyperparameters Selected
-
-| Parameter | Value | Rationale |
-|:----------|:-----:|:----------|
-| **Bands (b\*)** | **16** | First configuration achieving 100% recall |
-| **Rows (r\*)** | **4** | b × r = 64 (uses full 64-dim signature) |
-| **LSH Threshold (t)** | 0.500 | $t = (1/16)^{1/4} = 0.500$ |
-| **Decision Threshold (τ\*)** | 0.40 | Empirically optimal for Jaccard scoring |
-| **Avg Candidates at 200k Gallery** | 10.4 | Prunes 99.995% of search space |
-
-The precision-vs-candidates curve shows a sharp knee at b=16/r=4: above this point, precision collapses from 93% toward noise-level values while candidates explode by orders of magnitude.
+### Optimal Hyperparameters Selected:
+- **Optimal Band Configuration**: $b^* = 16, r^* = 4$ ($t = 0.500$).
+- **Zero False Negatives**: $b=16, r=4$ is the exact boundary where False Negatives drop to **0.000% (0 / 500)** while maintaining **99.9948% search space pruning** (only 10.3 candidates per query).
+- **Knee of the S-Curve**: For $r > 4$, false negatives rise rapidly (1.6% at $r=5$, 20.4% at $r=8$). For $r < 4$, candidate volume explodes exponentially ($2,427$ candidates at $r=2$, $112,726$ candidates at $r=1$), degrading latency from 1.85 ms to 254.9 ms.
 
 ---
 
-## 4. Phase 2 — Full 6M Standard Metrics (b=16, r=4, τ=0.40)
+## 4. Phase 1 — Slider Tuning & Recall Breakdown (20k Identities, 200k Gallery)
 
-Evaluated **2,500 balanced probes** (500 per quality level: q1, q3, q5, q7, q9) against the full **4,000,000-record gallery**.
+Evaluated 500 balanced probes (100 per quality level) across 20,000 identities (200,000 gallery records) with **runtime dynamic probe signature computation**.
 
-### LSH Index Build Performance
+### Experiment 1: Without LSH vs Tuned LSH ($b=16, r=4$)
 
-| Metric | Value |
-|:-------|:------|
-| Gallery Size | 4,000,000 records |
-| Indexing Time | **25 seconds** (vs 234s with dict-based index) |
-| Indexing Throughput | 162,695 records/sec |
-| Peak RAM | ~2.3 GB (vs ~8 GB with dict-based index) |
-| Implementation | Vectorized FNV-1a hashing + `np.argsort` + `np.searchsorted` |
+| Metric | Without LSH (Brute Force) | Tuned LSH ($b=16, r=4$) | Balanced LSH ($b=12, r=5$) | Standard Baseline ($b=8, r=8$) |
+|:---|:---:|:---:|:---:|:---:|
+| **Avg Query Latency** | 45.72 ms | **1.98 ms** | 1.80 ms | 1.60 ms |
+| **Hit@10 Rate** | 100.0% | **100.0%** | 98.6% | 79.8% |
+| **Candidate Mean Recall** | 1.0000 | **0.9258** | 0.7868 | 0.3776 |
+| **Candidate False Negatives** | 0 | **0 (0.0%)** | 7 (1.4%) | 101 (20.2%) |
+| **Zero-Recall Count** | 0 | **0 (0.0%)** | 7 (1.4%) | 101 (20.2%) |
+| **Avg Candidates** | 200,000 | **10.62** | 7.89 | 3.78 |
+| **Search Space Pruned** | 0.0% | **99.9947%** | 99.9961% | 99.9981% |
 
-### Bloom Filter Performance
+### Zero-Recall Failure Analysis Across Quality Levels ($b=16, r=4$):
 
-| Metric | Value |
-|:-------|:------|
-| Queries Screened | 2,500 |
-| False Negatives | **0** |
-| False Negative Rate | **0.00%** |
-| Avg Bloom Latency | 0.038 ms |
+| Quality Level | Queries Evaluated | Zero-Recall Failures | Hit@10 % | Mean Recall@10 | Candidate Hit % |
+|:---|:---:|:---:|:---:|:---:|:---:|
+| `q1` (Lowest) | 100 | **0 (0.0%)** | **100.0%** | 0.9320 | 100.0% |
+| `q3` (Pristine) | 100 | **0 (0.0%)** | **100.0%** | 0.9860 | 100.0% |
+| `q5` (Noisy) | 100 | **0 (0.0%)** | **100.0%** | 0.9010 | 100.0% |
+| `q7` (Good) | 100 | **0 (0.0%)** | **100.0%** | 0.9060 | 100.0% |
+| `q9` (Highest Noise) | 100 | **0 (0.0%)** | **100.0%** | 0.9040 | 100.0% |
+| **All Qualities Combined** | **500** | **0 (0.0%)** | **100.0%** | **0.9258** | **100.0%** |
 
-### Headline Retrieval Numbers
-
-| Metric | Value |
-|:-------|:------|
-| **Mean Reciprocal Rank (MRR)** | **0.9988** |
-| **MAP@10** | **0.9181** |
-| **Hit@10** | **99.92%** |
-| **LSH Candidate Recall** | **99.92%** |
-| **Total False Negatives** | **2** out of 2,500 (0.08%) |
-| **Bloom False Negatives** | 0 |
-| **LSH False Negatives** | 2 |
-| **Avg Candidates per Query** | 34.57 |
-| **Search Space Pruned** | **99.9991%** (4,000,000 → 34.6 candidates) |
-| **Throughput** | **1,033 QPS** |
-
-### Precision@K, Recall@K, Hit@K
-
-| K | Hit@K | Precision@K | Recall@K |
-|:-:|:-----:|:-----------:|:--------:|
-| 1 | 99.84% | 0.9984 | 0.0998 |
-| 5 | 99.92% | 0.9912 | 0.4956 |
-| **10** | **99.92%** | **0.9180** | **0.9180** |
-| 20 | 99.92% | 0.4595 | 0.9189 |
-| 50 | 99.92% | 0.1838 | 0.9189 |
-
-> **Note on P@10 = R@10 = 0.918**: Each identity has exactly 10 gallery observations (2 orientations × 5 quality levels). At K=10, the system retrieves ~9.18 of 10 true matches on average — thus precision and recall are numerically equal. Recall plateaus at ~0.919 beyond K=10 as the candidate pool is exhausted.
-
-### Decision Threshold Analysis (τ = 0.40)
-
-| Metric | Value |
-|:-------|:------|
-| True Positives | 22,920 |
-| False Positives | 48 |
-| Hit Rate at Threshold | 99.92% |
-| Avg Recall at Threshold | 0.9168 |
-| **Avg Precision at Threshold** | **0.9990** |
-
-### Quality-Level Breakdown (Zero-Recall Analysis)
-
-| Quality | Probes | Zero-Recall Failures | Failure Rate | Hit@10 | P@10 | R@10 | MRR | MAP@10 | Avg Candidates |
-|:-------:|:------:|:--------------------:|:------------:|:------:|:----:|:----:|:---:|:------:|:--------------:|
-| q1 (Lowest) | 500 | 0 | 0.0% | 100.00% | 0.8980 | 0.8980 | 1.0000 | 0.8982 | 32.2 |
-| q3 | 500 | 0 | 0.0% | 100.00% | 0.9810 | 0.9810 | 1.0000 | 0.9812 | 34.8 |
-| q5 | 500 | 1 | 0.2% | 99.80% | 0.9030 | 0.9030 | 0.9970 | 0.9029 | 33.1 |
-| q7 | 500 | 0 | 0.0% | 100.00% | 0.9176 | 0.9176 | 1.0000 | 0.9178 | 41.2 |
-| q9 (Highest) | 500 | 1 | 0.2% | 99.80% | 0.8904 | 0.8904 | 0.9970 | 0.8904 | 31.6 |
-| **Overall** | **2,500** | **2** | **0.08%** | **99.92%** | **0.9180** | **0.9180** | **0.9988** | **0.9181** | **34.6** |
-
-> **Observation**: q3 achieves the highest precision (0.981) as medium-quality fingerprints produce the most stable minutiae distributions. q9 and q1 have marginally lower precision due to extreme quality parameter ranges introducing hash variability, but still maintain 99.8%+ hit rates with 0 complete failures at these levels.
-
-### Latency Profile (2,500 Queries, 4M Gallery)
-
-| Metric | Value |
-|:-------|:------|
-| **Avg Latency** | **0.884 ms** |
-| P50 Latency | 0.725 ms |
-| P90 Latency | 1.470 ms |
-| **P99 Latency** | **2.830 ms** |
-| Min Latency | 0.348 ms |
-| Max Latency | 5.003 ms |
-| **Throughput** | **1,033 QPS** |
-
-**Per-query latency breakdown:**
-
-| Stage | Time (ms) | % of Query Time |
-|:------|:---------:|:---------------:|
-| Bloom Filter Gating | 0.038 | 4.3% |
-| **LSH Candidate Search** | **0.653** | **73.8%** |
-| Jaccard Scoring & Ranking | 0.176 | 19.9% |
+### Visual Artifacts & Tuning Curves
+- **Precision vs Candidates Curve**: [reports/figures/lsh_precision_vs_candidates_curve.png](file:///c:/Users/hrish/Projects/research_projects/duplicate_detection/reports/figures/lsh_precision_vs_candidates_curve.png)
+- **Tuning Tradeoffs (Recall vs Candidates)**: [reports/figures/lsh_tuning_tradeoffs.png](file:///c:/Users/hrish/Projects/research_projects/duplicate_detection/reports/figures/lsh_tuning_tradeoffs.png)
+- **Recall by Quality Breakdown**: [reports/figures/recall_by_quality_breakdown.png](file:///c:/Users/hrish/Projects/research_projects/duplicate_detection/reports/figures/recall_by_quality_breakdown.png)
 
 ---
 
-## 5. Phase 3 — 4-Way Architectural Comparison (b=16, r=4, 4M Gallery)
+## 5. Phase 2 — Full 6M Standard Metrics ($b=16, r=4, \tau=0.40$)
 
-100 queries per workload tested across three query types:
-- **Positive Queries**: Identity is in the database (duplicates exist).
-- **Negative Queries**: Identity is not in the database (no duplicates).
-- **Mixed Workload**: 50% positive / 50% negative (production simulation).
+Evaluated **2,500 balanced probes** (500 per quality level: `q1`, `q3`, `q5`, `q7`, `q9`) against the full **4,000,000-record gallery (400,000 unique identities)**. Every probe signature was derived dynamically at query time from raw minutiae.
 
-### Latency Comparison
+### LSH Index Build & Storage Performance
+
+| Metric | Value |
+|:-------|:------|
+| **Gallery Size** | 4,000,000 records |
+| **Unique Identities** | 400,000 identities |
+| **Indexing Time** | **39.92 seconds** |
+| **Indexing Throughput** | **100,203 records/second** |
+| **Peak RAM During Index Build** | **~2.3 GB** |
+| **Index Data Structure** | Contiguous sorted `uint64` keys + `int64` indices (`np.searchsorted`) |
+
+### LSH-Band Pre-Filter Performance
+
+| Metric | Value |
+|:-------|:------|
+| **Queries Screened** | 2,500 |
+| **Pre-Filter False Negatives** | 2 (0.08% FN rate) |
+| **Pre-Filter Evaluation Latency** | **0.042 ms (42 microseconds)** |
+| **Zero Metadata Leakage** | 100% biometric minutiae band hashes (no identity ID used) |
+
+### Headline Retrieval Accuracy
+
+| Metric | Value |
+|:-------|:------|
+| **Mean Reciprocal Rank (MRR)** | **0.9980** |
+| **MAP@10** | **0.9250** |
+| **Hit@1 Rate** | **99.80%** |
+| **Hit@5 Rate** | **99.80%** |
+| **Hit@10 Rate** | **99.80%** |
+| **Hit@20 Rate** | **99.80%** |
+| **Hit@50 Rate** | **99.80%** |
+| **Precision@10 (P@10)** | **0.9250** |
+| **Recall@10 (R@10)** | **0.9250** |
+| **LSH Candidate Recall** | **99.80%** |
+| **Total False Negatives** | **5** out of 2,500 (0.20%) |
+| **Avg Candidates per Query** | **37.09** |
+| **Search Space Pruned** | **99.9991%** (4,000,000 → 37 candidates) |
+| **End-to-End Query Throughput** | **442.6 QPS** |
+
+> **Note on P@10 = R@10 = 0.9250**: Because each identity has exactly 10 gallery observations in the randomized split, at $K=10$ the denominator for precision ($K=10$) and recall ($|\text{GroundTruth}|=10$) are identical. The system retrieves 9.25 out of 10 true gallery observations on average.
+
+### Decision Threshold Analysis ($\tau = 0.40$)
+
+| Metric | Value |
+|:-------|:------|
+| **Decision Threshold ($\tau$)** | 0.40 |
+| **True Positives (TP)** | 23,073 |
+| **False Positives (FP)** | **0** |
+| **Precision at Threshold** | **100.00%** |
+| **Hit Rate at Threshold** | 99.76% |
+| **Avg Recall at Threshold** | 0.9237 |
+
+### Quality-Level Breakdown (2,500 Queries, 4M Gallery)
+
+| Quality Level | Queries | Zero-Recall Failures | Failure Rate | Hit@10 % | P@10 | R@10 | MRR | MAP@10 | Avg Candidates |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| `q1` (Lowest) | 500 | 3 | 0.6% | 99.40% | 0.9008 | 0.9008 | 0.9940 | 0.9008 | 36.97 |
+| `q3` (Pristine) | 500 | 0 | 0.0% | 100.00% | 0.9838 | 0.9838 | 1.0000 | 0.9838 | 38.61 |
+| `q5` (Noisy) | 500 | 1 | 0.2% | 99.80% | 0.9030 | 0.9030 | 0.9980 | 0.9030 | 35.97 |
+| `q7` (Good) | 500 | 0 | 0.0% | 100.00% | 0.9224 | 0.9224 | 1.0000 | 0.9224 | 39.54 |
+| `q9` (Highest Noise) | 500 | 1 | 0.2% | 99.80% | 0.9148 | 0.9148 | 0.9980 | 0.9148 | 34.35 |
+| **Overall** | **2,500** | **5** | **0.20%** | **99.80%** | **0.9250** | **0.9250** | **0.9980** | **0.9250** | **37.09** |
+
+### End-to-End Latency Breakdown (Runtime Minutiae Computation Included)
+
+| Pipeline Stage | Avg Latency (ms) | % of Query Time | Description |
+|:---|:---:|:---:|:---|
+| **Raw Minutiae Tokenization & MinHash** | 1.408 ms | 64.9% | Spatial $k$-NN relative tokens + 64 modular MinHash hashes |
+| **LSH-Band Pre-Filter Gating** | 0.042 ms | 1.9% | Biometric band key membership test ($O(b)$) |
+| **LSH Candidate Search** | 0.541 ms | 24.9% | Binary search on sorted arrays (`np.searchsorted`) |
+| **Fraction Matching Scoring & Ranking** | 0.179 ms | 8.3% | Top-$K$ candidate verification ($\frac{1}{D} \sum \mathbb{I}[s_A = s_B]$) |
+| **Total End-to-End Query Latency** | **2.169 ms** | **100.0%** | **442.6 Queries / Second (Single Thread)** |
+
+- **Latency Percentiles**: P50: **2.054 ms** | P90: **2.934 ms** | P99: **4.363 ms** (Min: 0.577 ms, Max: 25.815 ms).
+
+---
+
+## 6. Phase 3 — 4-Way Architectural Latency & Accuracy Comparison (4M Gallery Scale)
+
+A rigorous architectural comparison was executed at the full **4,000,000 gallery scale** across three workloads (100 queries each):
+1. **Positive Queries (In Database)**: Known identities with gallery duplicates.
+2. **Negative Queries (Not in Database)**: Synthesized non-enrolled fingerprints.
+3. **Mixed Workload (50% Positive / 50% Negative)**: Realistic production simulation.
+
+All probe queries dynamically compute signatures at runtime from raw minutiae.
+
+### Latency Comparison Across Workloads
 
 | Configuration | Positive (In DB) | Negative (Not in DB) | Mixed (50/50) | Mixed Throughput |
-|:--------------|:----------------:|:--------------------:|:-------------:|:----------------:|
-| 1. Only MinHash (Brute Force) | 1,084.25 ms | 997.53 ms | 1,175.89 ms | 0.9 QPS |
-| **2. LSH + Bloom Filter** | **0.63 ms** | **0.008 ms** | **0.30 ms** | **3,333 QPS** |
-| 3. Bloom Filter (No LSH) | 925.52 ms | 0.009 ms | 524.33 ms | 1.9 QPS |
-| 4. LSH (No Bloom Filter) | 0.57 ms | 0.384 ms | 0.59 ms | 1,695 QPS |
+|:---|:---:|:---:|:---:|:---:|
+| **1. Only MinHash (Brute Force)** | 896.48 ms | 842.10 ms | 868.86 ms | 1.2 QPS |
+| **2. LSH + Band Pre-Filter (Full Pipeline)** | **2.14 ms** | **0.12 ms** | **1.16 ms** | **859.4 QPS** |
+| **3. Band Pre-Filter Only (No LSH)** | 921.59 ms | 0.12 ms | 465.07 ms | 2.2 QPS |
+| **4. LSH Only (No Pre-Filter)** | 2.09 ms | 0.36 ms | 1.23 ms | 810.4 QPS |
 
-### Speedup vs Brute Force
+### Empirical Speedup vs Brute Force Linear Scan
 
 | Configuration | Positive Speedup | Negative Speedup | Mixed Speedup |
-|:--------------|:----------------:|:----------------:|:-------------:|
-| **LSH + Bloom Filter** | **1,722×** | **124,815×** | **3,922×** |
-| Bloom Filter (No LSH) | 1.2× | 110,837× | 2.2× |
-| LSH (No Bloom Filter) | 1,897× | 2,598× | 1,993× |
+|:---|:---:|:---:|:---:|
+| **LSH + Band Pre-Filter (Full Pipeline)** | **419.6×** | **7,035.0×** | **746.7×** |
+| Band Pre-Filter Only (No LSH) | 1.0× | 7,213.9× | 1.9× |
+| LSH Only (No Pre-Filter) | 429.0× | 2,336.9× | 704.1× |
 
 ```
   Positive Queries (In DB):
-  Brute Force:         ████████████████████████████████████████ 1,084 ms
-  LSH + Bloom Filter:  ▏ 0.63 ms  [1,722x Speedup]
+  Brute Force:           ████████████████████████████████████████ 896.5 ms
+  LSH + Band Pre-filter: ▏ 2.14 ms  [419.6x Speedup]
 
   Negative Queries (Not in DB):
-  Brute Force:         ████████████████████████████████████████ 997 ms
-  LSH + Bloom Filter:  ▏ 0.008 ms [124,815x Speedup]
+  Brute Force:           ████████████████████████████████████████ 842.1 ms
+  LSH + Band Pre-filter: ▏ 0.12 ms  [7,035.0x Speedup]
 
   Mixed Workload (50/50):
-  Brute Force:         ████████████████████████████████████████ 1,175 ms
-  LSH + Bloom Filter:  ▏ 0.30 ms  [3,922x Speedup]
+  Brute Force:           ████████████████████████████████████████ 868.9 ms
+  LSH + Band Pre-filter: ▏ 1.16 ms  [746.7x Speedup]
 ```
 
 ### Retrieval Metrics (Positive Workload, 100 Queries)
 
-| Configuration | Hit@10 | Precision@10 | Recall@10 | False Negatives | Avg Candidates |
-|:--------------|:------:|:------------:|:---------:|:---------------:|:--------------:|
-| 1. Only MinHash (Brute Force) | 100.00% | 1.0000 | 1.0000 | 0 | 4,000,000 |
-| **2. LSH + Bloom Filter** | **99.00%** | **0.9070** | **0.9070** | **1** | **19.3** |
-| 3. Bloom Filter (No LSH) | 100.00% | 1.0000 | 1.0000 | 0 | 4,000,000 |
-| 4. LSH (No Bloom Filter) | 99.00% | 0.9070 | 0.9070 | 1 | 19.3 |
+| Configuration | Hit@10 % | Precision@10 | Recall@10 | False Negatives | Avg Candidates |
+|:---|:---:|:---:|:---:|:---:|:---:|
+| **1. Only MinHash (Brute Force)** | 100.0% | 1.0000 | 1.0000 | 0 | 4,000,000 |
+| **2. LSH + Band Pre-Filter (Full Pipeline)** | **100.0%** | **0.9370** | **0.9370** | **0** | **38.4** |
+| **3. Band Pre-Filter Only (No LSH)** | 100.0% | 1.0000 | 1.0000 | 0 | 4,000,000 |
+| **4. LSH Only (No Pre-Filter)** | 100.0% | 0.9370 | 0.9370 | 0 | 38.4 |
 
-**Key Architectural Insights:**
-
-1. **LSH is essential for positive queries**: Reduces search from 1,084 ms → 0.63 ms (1,722× speedup) while inspecting only **19.3 candidates** out of 4,000,000 (99.9995% search space reduction). The 1% miss rate (1/100) is a statistical edge case confirming the probabilistic guarantee of LSH.
-
-2. **Bloom filter is essential for negative queries**: Rejects non-existent fingerprints in **0.008 ms** (8 microseconds) without touching the LSH index at all — a **124,815×** speedup over brute force. Without Bloom, LSH alone still requires 0.384 ms per negative query (hashing and bucket lookups even if empty).
-
-3. **Combined pipeline dominates all scenarios**: In mixed workloads (realistic production), LSH+Bloom achieves 0.30 ms average — 3,922× faster than brute force and 1.97× faster than LSH alone, because Bloom eliminates ~50% of queries before any MinHash or LSH computation.
-
----
-
-## 6. LSH Index Engineering — Sorted-Array Implementation
-
-The `ScaledLSHIndex` was redesigned from a Python dict-based inverted index to a vectorized **sorted numpy array** implementation:
-
-| Aspect | Dict-Based (Old) | Sorted-Array (New) | Improvement |
-|:-------|:----------------:|:------------------:|:-----------:|
-| Indexing Time (4M records) | 234 seconds | **25 seconds** | **9.4× faster** |
-| Peak RAM | ~8 GB | **~2.3 GB** | **3.5× less** |
-| Lookup Algorithm | Python dict O(1) amortized | `np.searchsorted` binary search | Vectorized, cache-friendly |
-| Key Type | Python tuple/bytes | `int64` (FNV-1a-style hash) | Zero allocation per query |
-
-The key technique: each band's `(b_0, b_1, ..., b_{r-1})` row values are combined into a single `uint64` key via XOR-shift multiplication hashing, enabling the entire inverted index to be stored as two flat `int64` numpy arrays (`sorted_keys`, `sorted_indices`) and queried with `np.searchsorted`.
+### Architectural Insights & Findings
+1. **LSH Prunes Positive Queries by 420×**:
+   - Reduces search time from 896.5 ms to 2.14 ms, examining only **38.4 candidates** out of 4,000,000 (99.9990% pruning) while maintaining **100.0% Hit@10** and 0 false negatives.
+2. **Band Pre-Filter Short-Circuits Negative Queries by 7,035×**:
+   - Rejects non-enrolled fingerprints in **0.12 ms** without allocating candidates or querying individual LSH band buckets.
+   - Operates **3× faster than LSH alone** on negative queries (0.12 ms vs 0.36 ms), because it checks global band key sets before executing per-band binary searches.
+3. **Combined Pipeline Dominates Production Mixed Workloads**:
+   - On realistic 50/50 workloads, LSH + Band Pre-filter processes queries in **1.16 ms (859.4 QPS)**, achieving a **746.7× speedup** over brute-force linear search.
+4. **Zero Ground-Truth Leakage**:
+   - Unlike naive identity Bloom filters, the LSH-band pre-filter uses pure minutiae band keys. Non-existent queries are rejected based purely on biometric unreachability.
 
 ---
 
-## 7. Mathematical Collision Probability Reference
+## 7. Memory & Scalability Analysis
 
-$$P(\text{Collision at similarity } s) = 1 - (1 - s^r)^b$$
+The system was designed to fit comfortably within commodity workstation RAM (16–32 GB) even at 6,000,000 observation scale:
 
-| Configuration | b | r | Threshold t | P(collision) at s=0.20 | P(collision) at s=0.30 | P(collision) at s=0.50 |
-|:---|:-:|:-:|:-----------:|:-----------------------:|:-----------------------:|:-----------------------:|
-| Small-Scale | 8 | 8 | 0.771 | 0.002% | 0.052% | 0.4% |
-| **Optimal (b=16, r=4)** | **16** | **4** | **0.500** | **2.53%** | **12.21%** | **50.0%** |
-| Aggressive | 20 | 3 | 0.368 | 15.0% | 40.9% | 87.5% |
-| Over-sensitive | 32 | 2 | 0.177 | 73.0% | 95.3% | 99.9% |
-
-The b=16, r=4 configuration sits at the S-curve knee: sufficient recall for intra-identity Jaccard scores (~0.40–0.60) while rejecting uncorrelated fingerprints (s~0.10–0.20).
-
----
-
-## 8. Throughput & Scalability Benchmark
-
-| Operation | Scale | Total Time | Throughput | Peak RAM |
-| :--- | :--- | :---: | :---: | :---: |
-| **MinHash Extraction (40 Shards)** | 6,000,000 observations | 439.9 s (7.3 min) | 13,638 obs/sec | ~1.5 GB |
-| **400k Identity Bloom Filter Build** | 400,000 identities | 4.21 s | 95,012 IDs/sec | **702 KB** |
-| **LSH Index Build (4M Gallery)** | 4,000,000 records | **25 s** | **162,695 rec/sec** | **~2.3 GB** |
-| **Bloom Gating (Negative Query)** | Per query | 0.008 ms | 125,000 QPS | Zero |
-| **Full Pipeline (Positive Query)** | Per query (4M gallery) | 0.63 ms | 1,588 QPS | Sliced |
-| **Full Pipeline (Mixed Workload)** | Per query (4M gallery) | 0.30 ms | **3,333 QPS** | Sliced |
-| **Standard Benchmark (2,500 probes)** | 4M gallery | 2.42 s total | **1,033 QPS** | ~2.3 GB |
+| Component | Storage Type | Memory Footprint | Scaling Behavior |
+|:---|:---|:---:|:---|
+| **Raw Minutiae Observations** | 40 HDF5 Shards (`dataset/*.h5`) | ~18 GB (on disk, LZF) | $O(N)$, streamed as needed |
+| **Gallery MinHash Signatures** | `uint32` NumPy Matrix (4M × 64) | **256 MB** | $O(N_{\text{gallery}} \times D)$ |
+| **LSH Sorted-Array Index** | 16 bands $\times$ 2 flat `int64` arrays | **1.02 GB** | $O(B \times N_{\text{gallery}})$ |
+| **LSH Band Key Sets** | 16 Python `set` of `uint64` | **~50 MB** | $O(B \times |\text{Unique Keys}|)$ |
+| **Total Peak Operational RAM** | RAM | **~2.3 GB** | Linear, sub-proportional to gallery |
 
 ---
 
-## 9. Project Structure & Source Code Layout
-
-```
-duplicate_detection/
-├── dataset/
-│   ├── dataset_000.h5 ... dataset_039.h5     # 40 HDF5 shards (6,000,000 raw samples) [EXCLUDED FROM GIT]
-│   ├── manifest.json                         # Shard tracking manifest
-│   ├── bloom_filter_400k.bin / .json         # 400,000 identity Bloom filter (702 KB) [EXCLUDED FROM GIT]
-│   └── signatures_shards/
-│       ├── signatures_000.h5 ... _039.h5     # Extracted 6M MinHash signatures [EXCLUDED FROM GIT]
-├── src/
-│   ├── lsh_scale/
-│   │   ├── __init__.py                       # Package exports
-│   │   ├── vectorized_minhash.py             # Vectorized NumPy token extraction & modular MinHash
-│   │   ├── bloom_filter_6m.py                # ScaledIdentityBloomFilter & LargeBitArray
-│   │   ├── lsh_index_6m.py                   # ScaledLSHIndex — sorted-array inverted index
-│   │   └── hdf5_signature_extractor.py       # Sharded signature extractor & reader
-│   └── storage/
-│       └── hdf5_reader.py                    # HDF5 observation streaming reader
-├── scripts/
-│   ├── build_signatures_6m.py                # Parallel CLI signature extraction for 40 shards
-│   ├── latency_comparison_6m.py              # 4-way latency comparison benchmark script
-│   └── evaluate_similarity_6m.py             # Comprehensive retrieval accuracy benchmark
-├── reports/
-│   ├── latency_4way_results_scale.json       # Raw JSON — 4-way latency comparison (Phase 3)
-│   └── benchmark_6m_best_hyperparameters.json# Raw JSON — accuracy & retrieval metrics (Phase 2)
-└── tests/
-    └── test_lsh_scale.py                     # Unit tests verifying mathematical equivalence
-```
-
----
-
-## 10. CLI Usage Guide & Reproducibility
+## 8. CLI Usage Guide & Reproducibility
 
 ### 1. Run Automated Unit Tests
-Verifies mathematical equivalence of vectorized tokenization and modular MinHash against the baseline:
+Verifies mathematical equivalence of vectorized tokenization, modular MinHash, and fraction-matching scoring:
 ```powershell
 python -m pytest tests/test_lsh_scale.py -v
 ```
 
 ### 2. Extract Signatures Across 40 Shards (6M Observations)
-Processes all 40 HDF5 shards into LZF-compressed signature shards and constructs the 400k Bloom filter:
+Processes all 40 HDF5 shards using randomized train/test split:
 ```powershell
 python scripts/build_signatures_6m.py --num-workers 10 --batch-size 25000
 ```
 
-### 3. Run 4-Way Latency Comparison Benchmark (Phase 3)
+### 3. Run LSH-Band Pre-Filter Parameter Sweep
+Sweeps 9 band configurations on 200k gallery with runtime probe signatures:
+```powershell
+python scripts/run_band_prefilter_sweep.py --max-gallery 200000 --num-queries 500
+```
+
+### 4. Run Phase 1 Slider Tuning on 20k Identities
+Evaluates slider configurations with runtime probe signatures and generates visualization figures:
+```powershell
+python scripts/evaluate_lsh_experiments.py --gallery-size 200000 --eval-queries 500
+```
+
+### 5. Run Phase 2 Full 6M Standard Metrics Benchmark
+Evaluates MRR, MAP@10, Hit@K, candidate recall, zero-recall quality breakdown, and latency percentiles on 4M gallery:
+```powershell
+python scripts/evaluate_similarity_6m.py --max-gallery 4000000 --num-queries 2500 --bands 16 --rows 4 --tau 0.4
+```
+
+### 6. Run Phase 3 4-Way Architectural Latency Comparison
 Executes the 4-way latency evaluation across Positive, Negative, and Mixed workloads:
 ```powershell
 python scripts/latency_comparison_6m.py --max-gallery 4000000 --num-queries 100 --bands 16 --rows 4
 ```
 
-### 4. Run Retrieval Accuracy & Efficiency Benchmark (Phase 2)
-Computes MRR, MAP@10, Hit@K, candidate recall, zero-recall quality breakdown, and latency percentiles:
-```powershell
-python scripts/evaluate_similarity_6m.py --max-gallery 4000000 --num-queries 2500 --bands 16 --rows 4 --tau 0.4
-```
-
 ---
 
-## 11. Summary of Results
+## 9. Summary of Results
 
-| Aspect | Small-Scale (10k Gallery) | **Large-Scale (4M Gallery)** |
-|:-------|:-------------------------:|:----------------------------:|
-| Optimal Configuration | b=8, r=8, t=0.77 | **b=16, r=4, t=0.50, τ=0.40** |
-| MRR | 0.790 | **0.9988** |
-| MAP@10 | 0.389 | **0.9181** |
-| Hit@10 | 79.0% | **99.92%** |
-| Total False Negatives | — | **2 / 2,500 (0.08%)** |
-| Search Space Reduction | 99.96% | **99.9991%** |
-| Avg Candidates | ~4 | **34.6** |
-| Avg Query Latency | — | **0.884 ms** |
-| P99 Latency | — | **2.830 ms** |
-| Throughput | — | **1,033 QPS** |
-| Speedup vs Brute Force (Positive) | 10.4× | **1,722×** |
-| Speedup vs Brute Force (Negative) | 53,300× | **124,815×** |
-| LSH Index RAM | — | **~2.3 GB** |
-| LSH Index Build Time | — | **25 seconds** |
+| Metric | Small-Scale Baseline | Phase 1 (20k Identities) | **Phase 2 Full Scale (6M Observations)** | Phase 3 (Mixed Workload) |
+|:---|:---:|:---:|:---:|:---:|
+| **Gallery Scale** | 10,000 | 200,000 | **4,000,000** | 4,000,000 |
+| **Total Observations** | 15,000 | 300,000 | **6,000,000 (4 Lakh IDs)** | 6,000,000 |
+| **Probe Signature Derivation** | Pre-computed | Runtime Dynamic | **Runtime Dynamic (Raw Minutiae)** | Runtime Dynamic |
+| **LSH Configuration** | $b=8, r=8$ | $b=16, r=4$ | **$b=16, r=4$ ($t=0.50$)** | $b=16, r=4$ |
+| **Mean Reciprocal Rank (MRR)** | 0.790 | 1.0000 | **0.9980** | 1.0000 |
+| **MAP@10** | 0.389 | 0.9258 | **0.9250** | — |
+| **Hit@10 Rate** | 79.0% | 100.0% | **99.80%** | **100.0%** |
+| **Precision@10 (P@10)** | — | 0.9258 | **0.9250** | 0.9370 |
+| **Recall@10 (R@10)** | — | 0.9258 | **0.9250** | 0.9370 |
+| **Zero-Recall Failures** | — | **0 / 500 (0.0%)** | **5 / 2,500 (0.20%)** | **0 / 100 (0.0%)** |
+| **Pre-Filter False Negatives** | — | **0 / 500 (0.0%)** | **2 / 2,500 (0.08%)** | **0 / 100 (0.0%)** |
+| **Avg Candidates per Query** | ~4 | 10.6 | **37.09** | 38.4 |
+| **Search Space Pruned** | 99.96% | 99.9947% | **99.9991%** | 99.9990% |
+| **Average Query Latency** | — | 1.98 ms | **2.169 ms** | **1.164 ms** |
+| **P99 Query Latency** | — | 3.62 ms | **4.363 ms** | **3.184 ms** |
+| **Throughput (QPS)** | — | 505 QPS | **442.6 QPS** | **859.4 QPS** |
+| **Speedup vs Brute Force (Positive)** | 10.4× | 23.1× | — | **419.6×** |
+| **Speedup vs Brute Force (Negative)** | 53,300× | — | — | **7,035.0×** |
+| **Speedup vs Brute Force (Mixed)** | — | — | — | **746.7×** |
+| **LSH Index Build Time** | — | 1.33 s | **39.92 s** | 40.94 s |
+| **LSH Index Peak RAM** | — | ~300 MB | **~2.3 GB** | ~2.3 GB |

@@ -1,7 +1,11 @@
 """
 CLI Script: Extract MinHash Signatures for 6-Million Dataset across 40 HDF5 Shards.
 
-Processes shards in parallel using multiprocessing and constructs the 400,000-identity Bloom filter.
+Processes shards in parallel using multiprocessing.
+The Bloom filter is no longer built here — the LSH-band pre-filter is derived
+automatically from the index at query time.
+
+Train/test split is now randomised per-identity (1/3 probes, 2/3 gallery).
 """
 
 import os
@@ -17,7 +21,7 @@ workspace_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(workspace_root))
 
 from src.lsh_scale.hdf5_signature_extractor import process_single_shard
-from src.lsh_scale.bloom_filter_6m import ScaledIdentityBloomFilter
+# Bloom filter no longer built here — pre-filter is derived from LSH index at runtime
 
 
 def worker_task(args: Tuple[str, str, int, bool]) -> dict:
@@ -79,10 +83,10 @@ def main():
         help="Skip already processed shards."
     )
     parser.add_argument(
-        "--bloom-output",
-        type=str,
-        default=str(workspace_root / "dataset" / "bloom_filter_400k"),
-        help="Path prefix to save the 400k identity Bloom filter."
+        "--seed",
+        type=int,
+        default=42,
+        help="RNG seed for randomised per-identity train/test split."
     )
 
     args = parser.parse_args()
@@ -136,21 +140,8 @@ def main():
     print(f"Overall Throughput: {overall_throughput:,.0f} observations/second")
     print("=" * 70)
 
-    # Build and save 400,000 Identity Bloom Filter
-    print(f"\nBuilding 400,000-Identity Bloom Filter...")
-    t_bf0 = time.perf_counter()
-    bf = ScaledIdentityBloomFilter(capacity=400000, error_rate=0.001)
-
-    # Identifiers in the dataset run consecutively from 1 to 400,000
-    # Add all 400,000 unique identities
-    bf.add_all(range(1, 400001))
-    t_bf1 = time.perf_counter()
-
-    bf.save(args.bloom_output)
-    print(f"Bloom Filter built in {t_bf1 - t_bf0:.2f}s and saved to {args.bloom_output}.bin/.json")
-    print("Diagnostic statistics:")
-    for k, v in bf.get_stats().items():
-        print(f"  |- {k:25s}: {v}")
+    print("\nNote: Bloom filter is no longer built. The LSH-band pre-filter is")
+    print("      derived automatically from the index at query time.")
 
 
 if __name__ == "__main__":

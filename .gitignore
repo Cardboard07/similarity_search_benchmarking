@@ -32,3 +32,5 @@ dataset/signatures_shards/
 # Ignore contents of data_structure but keep directory
 **/data_structure/*
 !**/data_structure/.gitkeep
+
+tmp/

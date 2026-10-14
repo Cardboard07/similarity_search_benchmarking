@@ -28,86 +28,104 @@ workspace_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(workspace_root))
 
 from src.lsh_scale.lsh_index_6m import ScaledLSHIndex
+from src.lsh_scale.vectorized_minhash import VectorizedMinHashEngine
 
 
-def load_20k_dataset(shards_dir: Path) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def load_20k_dataset(
+    shards_dir: Path, dataset_dir: Path, samples_per_quality: int = 100, seed: int = 42
+) -> Tuple[np.ndarray, np.ndarray, List[Tuple[np.ndarray, np.ndarray, np.ndarray]], np.ndarray, np.ndarray]:
     """
     Loads 20,000 identities (shards 0 and 1).
+    Gallery signatures are loaded from signature shards.
+    Probe raw minutiae are loaded from dataset shards for runtime signature computation.
+    Selects balanced probe queries across metadata first, then loads minutiae only for the subset.
     Returns:
-        gallery_sigs, gallery_ids, all_probe_sigs, all_probe_ids, all_probe_quals
+        gallery_sigs, gallery_ids, query_minutiae, query_ids, query_quals
     """
     print("[1/5] Loading 20,000 identities (shards 0 and 1)...")
     t0 = time.time()
     g_sigs, g_ids = [], []
-    p_sigs, p_ids, p_quals = [], [], []
+    rng = np.random.default_rng(seed)
+
+    candidates_by_qual: Dict[int, List[Tuple[int, int, int]]] = {}
 
     for shard in [0, 1]:
         sf = shards_dir / f"signatures_{shard:03d}.h5"
-        with h5py.File(sf, "r") as f:
-            is_train = f["metadata/is_train"][:]
-            sigs = f["data/signatures"][:]
-            ids = f["metadata/synthetic_identity"][:]
-            quals = f["metadata/quality"][:]
+        with h5py.File(sf, "r") as s_f:
+            is_train = s_f["metadata/is_train"][:]
+            sigs = s_f["data/signatures"][:]
+            ids = s_f["metadata/synthetic_identity"][:]
+            quals = s_f["metadata/quality"][:]
 
             g_sigs.append(sigs[is_train])
             g_ids.append(ids[is_train])
 
-            p_sigs.append(sigs[~is_train])
-            p_ids.append(ids[~is_train])
-            p_quals.append(quals[~is_train])
+            probe_idx = np.where(~is_train)[0]
+            for gi in probe_idx:
+                q = int(quals[gi])
+                ident = int(ids[gi])
+                candidates_by_qual.setdefault(q, []).append((shard, int(gi), ident))
 
     gallery_sigs = np.vstack(g_sigs)
     gallery_ids = np.concatenate(g_ids)
-    probe_sigs = np.vstack(p_sigs)
-    probe_ids = np.concatenate(p_ids)
-    probe_quals = np.concatenate(p_quals)
+
+    # Balanced query selection across [3, 7, 5, 1, 9]
+    selected_per_shard: Dict[int, List[Tuple[int, int, int]]] = {}
+    for q in [3, 7, 5, 1, 9]:
+        cand_list = candidates_by_qual.get(q, [])
+        n = min(samples_per_quality, len(cand_list))
+        chosen = rng.choice(len(cand_list), size=n, replace=False)
+        for ci in chosen:
+            s_idx, gi, ident = cand_list[ci]
+            selected_per_shard.setdefault(s_idx, []).append((gi, ident, q))
+
+    # Read minutiae ONLY for selected queries
+    query_minutiae, query_ids, query_quals = [], [], []
+    for s_idx, items in selected_per_shard.items():
+        df = dataset_dir / f"dataset_{s_idx:03d}.h5"
+        with h5py.File(df, "r") as d_f:
+            d_min = d_f["data/minutiae"]
+            d_num = d_f["data/num_minutiae"]
+            for gi, ident, q in items:
+                c = int(d_num[gi])
+                pts = d_min[gi, :c, :2].copy()
+                angles = d_min[gi, :c, 2].copy()
+                types = d_min[gi, :c, 3].astype(np.int32)
+                query_minutiae.append((pts, angles, types))
+                query_ids.append(ident)
+                query_quals.append(q)
+
+    perm = rng.permutation(len(query_ids))
+    sel_min = [query_minutiae[i] for i in perm]
+    sel_ids = np.array([query_ids[i] for i in perm])
+    sel_quals = np.array([query_quals[i] for i in perm])
 
     elapsed = time.time() - t0
     print(f"      Gallery loaded: {len(gallery_sigs):,} records across {len(np.unique(gallery_ids)):,} identities.")
-    print(f"      Probes loaded:  {len(probe_sigs):,} records. (Elapsed: {elapsed:.2f}s)")
-    return gallery_sigs, gallery_ids, probe_sigs, probe_ids, probe_quals
-
-
-def select_balanced_queries(
-    probe_sigs: np.ndarray,
-    probe_ids: np.ndarray,
-    probe_quals: np.ndarray,
-    samples_per_quality: int = 200,
-    seed: int = 42
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Selects balanced probe queries across all 5 quality levels: 3, 7, 5, 1, 9.
-    """
-    rng = np.random.default_rng(seed)
-    selected_indices = []
-
-    for q in [3, 7, 5, 1, 9]:
-        q_idx = np.where(probe_quals == q)[0]
-        chosen = rng.choice(q_idx, size=min(samples_per_quality, len(q_idx)), replace=False)
-        selected_indices.extend(chosen)
-
-    selected_indices = np.array(selected_indices)
-    return probe_sigs[selected_indices], probe_ids[selected_indices], probe_quals[selected_indices]
+    print(f"      Probe minutiae loaded: {len(sel_min):,} balanced queries. (Elapsed: {elapsed:.2f}s)")
+    return gallery_sigs, gallery_ids, sel_min, sel_ids, sel_quals
 
 
 def run_experiment_1_recall_analysis(
     gallery_sigs: np.ndarray,
     gallery_ids: np.ndarray,
-    query_sigs: np.ndarray,
+    query_minutiae: List[Tuple[np.ndarray, np.ndarray, np.ndarray]],
     query_ids: np.ndarray,
-    query_quals: np.ndarray
+    query_quals: np.ndarray,
+    engine: VectorizedMinHashEngine,
 ) -> Dict[str, Any]:
     """
     Experiment 1: Comprehensive Recall & Zero-Recall Analysis.
     Compares Without LSH (Brute Force) vs LSH at multiple configurations.
+    Probe signatures are computed AT RUNTIME from raw minutiae.
     """
     print("\n[2/5] Running Experiment 1: Recall Formulation & Zero-Recall Breakdown...")
-    n_queries = len(query_sigs)
+    n_queries = len(query_minutiae)
     n_gallery = len(gallery_sigs)
 
     # 1. Without LSH (Brute-Force Linear Scan)
     print("      Evaluating Without LSH (Brute-Force Scan of 200k gallery)...")
-    t0_bf = time.time()
+    t0_bf = time.perf_counter()
     bf_recall_10_list = []
     bf_recall_1_list = []
     bf_hit_10_list = []
@@ -116,9 +134,10 @@ def run_experiment_1_recall_analysis(
 
     for i in range(n_queries):
         q_id = query_ids[i]
-        q_sig = query_sigs[i]
+        pts, angles, types = query_minutiae[i]
         q_q = query_quals[i]
 
+        q_sig = engine.process_observation(pts, angles, types)
         sims = np.mean(gallery_sigs == q_sig, axis=1)
         top10_idx = np.argpartition(sims, -10)[-10:]
         top10_idx = top10_idx[np.argsort(-sims[top10_idx])]
@@ -139,7 +158,7 @@ def run_experiment_1_recall_analysis(
         if hits10 == 0:
             bf_by_qual[q_q]["zero_cnt"] += 1
 
-    t_bf_elapsed = time.time() - t0_bf
+    t_bf_elapsed = time.perf_counter() - t0_bf
     bf_zero_rec10 = sum(1 for r in bf_recall_10_list if r == 0.0)
 
     # Helper for evaluating an LSH configuration
@@ -147,7 +166,7 @@ def run_experiment_1_recall_analysis(
         print(f"      Evaluating {label} (bands={b}, rows={r})...")
         lsh = ScaledLSHIndex(bands=b, rows=r)
         lsh.index_signatures(gallery_sigs)
-        t0 = time.time()
+        t0 = time.perf_counter()
         rec10_list, hit10_list, cand_rec_list, cand_hit_list = [], [], [], []
         cand_counts = []
         zero_cand_cnt = 0
@@ -156,9 +175,10 @@ def run_experiment_1_recall_analysis(
         
         for i in range(n_queries):
             q_id = query_ids[i]
-            q_sig = query_sigs[i]
+            pts, angles, types = query_minutiae[i]
             q_q = query_quals[i]
-            
+
+            q_sig = engine.process_observation(pts, angles, types)
             cands = lsh.find_candidates(q_sig)
             n_c = len(cands)
             cand_counts.append(n_c)
@@ -209,7 +229,7 @@ def run_experiment_1_recall_analysis(
                 zero_rec10_cnt += 1
                 by_qual[q_q]["zero_cnt"] += 1
                 
-        elapsed = time.time() - t0
+        elapsed = time.perf_counter() - t0
         return {
             "method": f"LSH Index (bands={b}, rows={r} - {label})",
             "total_queries": n_queries,
@@ -277,14 +297,16 @@ def run_experiment_1_recall_analysis(
 def run_experiment_2_slider_tuning_and_curves(
     gallery_sigs: np.ndarray,
     gallery_ids: np.ndarray,
-    query_sigs: np.ndarray,
-    query_ids: np.ndarray
+    query_minutiae: List[Tuple[np.ndarray, np.ndarray, np.ndarray]],
+    query_ids: np.ndarray,
+    engine: VectorizedMinHashEngine,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Experiment 2: Tuning LSH Sliders (bands, rows) and Precision-Candidate Curves.
+    Probe signatures are computed AT RUNTIME from raw minutiae.
     """
     print("\n[3/5] Running Experiment 2: LSH Slider Tuning & Precision-Candidate Mapping...")
-    n_queries = len(query_sigs)
+    n_queries = len(query_minutiae)
     n_gallery = len(gallery_sigs)
 
     configs = [
@@ -303,10 +325,10 @@ def run_experiment_2_slider_tuning_and_curves(
 
     for b, r in configs:
         print(f"      Tuning config: bands={b:2d}, rows={r:2d} (Threshold t ~ {(1/b)**(1/r):.3f})...")
-        t0_build = time.time()
+        t0_build = time.perf_counter()
         lsh = ScaledLSHIndex(bands=b, rows=r)
         lsh.index_signatures(gallery_sigs)
-        t_build = time.time() - t0_build
+        t_build = time.perf_counter() - t0_build
 
         cand_counts = []
         cand_hits = []
@@ -317,11 +339,12 @@ def run_experiment_2_slider_tuning_and_curves(
         zero_cand_cnt = 0
         zero_top10_cnt = 0
 
-        t0_q = time.time()
+        t0_q = time.perf_counter()
         for i in range(n_queries):
             q_id = query_ids[i]
-            q_sig = query_sigs[i]
+            pts, angles, types = query_minutiae[i]
 
+            q_sig = engine.process_observation(pts, angles, types)
             cands = lsh.find_candidates(q_sig)
             n_c = len(cands)
             cand_counts.append(n_c)
@@ -360,7 +383,7 @@ def run_experiment_2_slider_tuning_and_curves(
             if hits_in_top10 == 0:
                 zero_top10_cnt += 1
 
-        t_q_total = time.time() - t0_q
+        t_q_total = time.perf_counter() - t0_q
         avg_cands = float(np.mean(cand_counts))
         pruning_ratio = float((1.0 - (avg_cands / n_gallery)) * 100.0)
         cand_hit_rate = float(np.mean(cand_hits) * 100.0)
@@ -397,7 +420,9 @@ def run_experiment_2_slider_tuning_and_curves(
     candidate_budgets = [1, 2, 4, 8, 12, 16, 25, 50, 100, 200, 500]
     budget_curve = []
 
-    all_query_cands = [lsh_opt.find_candidates(query_sigs[i]) for i in range(n_queries)]
+    # Compute runtime signatures and candidates for candidate budget curve
+    all_query_sigs = [engine.process_observation(*query_minutiae[i]) for i in range(n_queries)]
+    all_query_cands = [lsh_opt.find_candidates(all_query_sigs[i]) for i in range(n_queries)]
 
     for budget in candidate_budgets:
         prec_at_budget = []
@@ -406,7 +431,7 @@ def run_experiment_2_slider_tuning_and_curves(
 
         for i in range(n_queries):
             q_id = query_ids[i]
-            q_sig = query_sigs[i]
+            q_sig = all_query_sigs[i]
             cands = all_query_cands[i]
             if len(cands) == 0:
                 prec_at_budget.append(0.0)
@@ -583,6 +608,7 @@ def generate_visualization_figures(
 
 def main():
     shards_dir = workspace_root / "dataset" / "signatures_shards"
+    dataset_dir = workspace_root / "dataset"
     reports_dir = workspace_root / "reports"
     figures_dir = reports_dir / "figures"
     reports_dir.mkdir(parents=True, exist_ok=True)
@@ -591,25 +617,25 @@ def main():
     print("=" * 80)
     print("      LSH TUNING, RECALL FORMULATION & PRECISION-CANDIDATE EXPERIMENTS")
     print("      Database: 20,000 Unique Fingerprint Identities (200,000 Gallery Records)")
+    print("      Runtime probe signature generation enabled")
     print("=" * 80)
 
-    # 1. Load 20k dataset
-    gallery_sigs, gallery_ids, all_probe_sigs, all_probe_ids, all_probe_quals = load_20k_dataset(shards_dir)
+    engine = VectorizedMinHashEngine(num_hashes=64, seed=42)
 
-    # 2. Select balanced 500 probe queries (100 per quality: 3, 7, 5, 1, 9)
-    query_sigs, query_ids, query_quals = select_balanced_queries(
-        all_probe_sigs, all_probe_ids, all_probe_quals, samples_per_quality=100, seed=42
+    # 1. Load 20k dataset & select balanced queries
+    gallery_sigs, gallery_ids, query_minutiae, query_ids, query_quals = load_20k_dataset(
+        shards_dir=shards_dir, dataset_dir=dataset_dir, samples_per_quality=100, seed=42
     )
-    print(f"[2/5] Selected {len(query_sigs)} balanced test queries (100 from each quality: 3, 7, 5, 1, 9).")
+    print(f"[2/5] Selected {len(query_minutiae)} balanced test queries (100 from each quality: 3, 7, 5, 1, 9).")
 
     # 3. Run Experiment 1: Recall Formulation & Zero-Recall Analysis
     exp1_results = run_experiment_1_recall_analysis(
-        gallery_sigs, gallery_ids, query_sigs, query_ids, query_quals
+        gallery_sigs, gallery_ids, query_minutiae, query_ids, query_quals, engine
     )
 
     # 4. Run Experiment 2: Slider Tuning & Precision vs Candidates Curve
     exp2_grid, exp2_curve = run_experiment_2_slider_tuning_and_curves(
-        gallery_sigs, gallery_ids, query_sigs, query_ids
+        gallery_sigs, gallery_ids, query_minutiae, query_ids, engine
     )
 
     # 5. Generate Figures
@@ -622,8 +648,9 @@ def main():
         "metadata": {
             "dataset": "20,000 unique identities (shards 0 & 1)",
             "gallery_size": len(gallery_sigs),
-            "probe_queries_evaluated": len(query_sigs),
+            "probe_queries_evaluated": len(query_minutiae),
             "eval_distribution": "100 queries each for qualities [3, 7, 5, 1, 9]",
+            "probe_signatures": "computed_at_runtime",
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ")
         },
         "experiment_1_recall_formulation_and_failures": exp1_results,
