@@ -190,7 +190,7 @@ def run_workload(
     }
 
     # ================================================================
-    # Mode 2: LSH + Band Pre-filter (Full Pipeline)
+    # Mode 2: LSH + Band Bloom Filter (Full Pipeline)
     # ================================================================
     reset_neg()
     lats2 = []; hits2 = prec2 = rec2 = fn2 = cands2 = 0
@@ -211,7 +211,7 @@ def run_workload(
             hits2 += h; prec2 += p; rec2 += r; fn2 += f
     a2 = np.array(lats2)
     results["2_lsh_and_prefilter"] = {
-        "name": "LSH + Band Pre-filter (Full Pipeline)",
+        "name": "LSH + Band Bloom Filter (Full Pipeline)",
         "avg_latency_ms":   round(float(np.mean(a2)), 3),
         "p50_latency_ms":   round(float(np.median(a2)), 3),
         "p99_latency_ms":   round(float(np.percentile(a2, 99)), 3),
@@ -226,7 +226,7 @@ def run_workload(
     }
 
     # ================================================================
-    # Mode 3: Band Pre-filter Only (No LSH) — brute-force on accepted
+    # Mode 3: Band Bloom Filter Only (No LSH) — brute-force on accepted
     # ================================================================
     reset_neg()
     lats3 = []; hits3 = prec3 = rec3 = fn3 = cands3 = 0
@@ -246,7 +246,7 @@ def run_workload(
             hits3 += h; prec3 += p; rec3 += r; fn3 += f
     a3 = np.array(lats3)
     results["3_prefilter_no_lsh"] = {
-        "name": "Band Pre-filter Only (No LSH, brute-force after accept)",
+        "name": "Band Bloom Filter Only (No LSH, brute-force after accept)",
         "avg_latency_ms":   round(float(np.mean(a3)), 3),
         "p50_latency_ms":   round(float(np.median(a3)), 3),
         "p99_latency_ms":   round(float(np.percentile(a3, 99)), 3),
@@ -360,7 +360,7 @@ def run_latency_comparison(
             "bands": bands, "rows": rows,
             "theoretical_threshold": round((1.0 / bands) ** (1.0 / rows), 4),
             "probe_signatures":  "computed_at_runtime",
-            "prefilter":         "lsh_band_keyset",
+            "prefilter":         "lsh_band_bloom_filter",
             "similarity_metric": "fraction_matching_positions",
             "split":             "randomised_per_identity",
             "timestamp":         time.strftime("%Y-%m-%dT%H:%M:%SZ"),

@@ -392,7 +392,15 @@ def evaluate_retrieval(
             "split":                  "randomised_per_identity",
             "probe_signatures":       "computed_at_runtime",
             "similarity_metric":      "fraction_matching_positions (MinHash estimator)",
-            "prefilter":              "lsh_band_keyset (replaces Bloom filter)",
+            "prefilter":              "lsh_band_bloom_filter (probabilistic bit array)",
+        },
+        "bloom_filter_summary": {
+            "type":                        "LSH Band Bloom Filter (Probabilistic Bit Array)",
+            "queries_screened":            total_queries,
+            "queries_rejected_by_bloom":   pf_rejected,
+            "bloom_filter_false_negatives": pf_false_negatives,
+            "bloom_filter_fn_rate_pct":    round(pf_false_negatives / queries_with_gt * 100.0, 4) if queries_with_gt > 0 else 0.0,
+            "avg_bloom_filter_latency_ms": round(float(np.mean(prefilter_latencies)), 4) if prefilter_latencies else 0.0,
         },
         "prefilter_summary": {
             "queries_screened":            total_queries,

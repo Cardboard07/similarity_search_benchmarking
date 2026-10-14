@@ -13,23 +13,31 @@
         "split": "randomised_per_identity",
         "probe_signatures": "computed_at_runtime",
         "similarity_metric": "fraction_matching_positions (MinHash estimator)",
-        "prefilter": "lsh_band_keyset (replaces Bloom filter)"
+        "prefilter": "lsh_band_bloom_filter (probabilistic bit array)"
+    },
+    "bloom_filter_summary": {
+        "type": "LSH Band Bloom Filter (Probabilistic Bit Array)",
+        "queries_screened": 2500,
+        "queries_rejected_by_bloom": 0,
+        "bloom_filter_false_negatives": 0,
+        "bloom_filter_fn_rate_pct": 0.0,
+        "avg_bloom_filter_latency_ms": 0.0526
     },
     "prefilter_summary": {
         "queries_screened": 2500,
-        "queries_rejected_by_prefilter": 2,
-        "prefilter_false_negatives": 2,
-        "prefilter_fn_rate_pct": 0.08,
-        "avg_prefilter_latency_ms": 0.042
+        "queries_rejected_by_prefilter": 0,
+        "prefilter_false_negatives": 0,
+        "prefilter_fn_rate_pct": 0.0,
+        "avg_prefilter_latency_ms": 0.0526
     },
     "lsh_index_efficiency": {
         "gallery_size": 4000000,
-        "indexing_time_sec": 39.92,
-        "indexing_throughput_records_per_sec": 100203.3,
+        "indexing_time_sec": 90.46,
+        "indexing_throughput_records_per_sec": 44218.0,
         "avg_candidates_per_query": 37.09,
         "candidate_pruning_ratio_pct": 99.9991,
         "lsh_candidate_recall_pct": 99.8,
-        "lsh_false_negatives": 3
+        "lsh_false_negatives": 5
     },
     "retrieval_accuracy": {
         "mrr": 0.998,
@@ -65,7 +73,7 @@
         "true_positives": 23073,
         "false_positives": 0,
         "hit_rate_at_threshold_pct": 99.76,
-        "avg_recall_at_threshold": 0.9237,
+        "avg_recall_at_threshold": 0.9229,
         "avg_precision_at_threshold": 1.0
     },
     "quality_breakdown": {
@@ -131,19 +139,19 @@
         }
     },
     "latency_profile": {
-        "total_evaluation_time_sec": 5.648,
-        "throughput_qps": 442.6,
-        "avg_latency_ms": 2.169,
-        "p50_latency_ms": 2.054,
-        "p90_latency_ms": 2.934,
-        "p99_latency_ms": 4.363,
-        "min_latency_ms": 0.577,
-        "max_latency_ms": 25.815,
+        "total_evaluation_time_sec": 5.303,
+        "throughput_qps": 471.4,
+        "avg_latency_ms": 2.026,
+        "p50_latency_ms": 1.816,
+        "p90_latency_ms": 3.011,
+        "p99_latency_ms": 4.513,
+        "min_latency_ms": 0.817,
+        "max_latency_ms": 6.532,
         "breakdown_ms_per_query": {
-            "signature_computation": 1.4075,
-            "lsh_band_prefilter": 0.042,
-            "lsh_candidate_search": 0.5412,
-            "minhash_scoring": 0.179
+            "signature_computation": 1.3716,
+            "lsh_band_prefilter": 0.0526,
+            "lsh_candidate_search": 0.4412,
+            "minhash_scoring": 0.1609
         }
     }
 }

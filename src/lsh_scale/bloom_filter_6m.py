@@ -11,6 +11,7 @@ import json
 import hashlib
 from pathlib import Path
 from typing import Any, Iterable, List, Tuple, Union, Optional
+import numpy as np
 
 
 class LargeBitArray:
@@ -191,3 +192,86 @@ class ScaledIdentityBloomFilter:
 
         bf.bit_array = LargeBitArray.from_bytes(data, meta["m"])
         return bf
+
+
+class LSHBandBloomFilter:
+    """
+    High-Performance Bloom Filter over LSH Band Signatures.
+
+    Rather than filtering by ground-truth identity ID (which leaks metadata),
+    this Bloom filter screens biometric queries by checking whether any of their
+    LSH band sub-hashes exist in the enrolled gallery.
+
+    Uses Kirsch-Mitzenmacher 64-bit integer double-hashing with bitwise array
+    backed by numpy uint8 array for sub-microsecond query membership testing.
+    """
+    def __init__(self, capacity: int = 4000000, error_rate: float = 0.001):
+        self.capacity: int = max(10000, capacity)
+        self.target_error_rate: float = error_rate
+        # Optimal m = - (n * ln(p)) / (ln(2)^2)
+        self.m: int = int(math.ceil(- (self.capacity * math.log(error_rate)) / (math.log(2) ** 2)))
+        # Optimal k = (m / n) * ln(2)
+        self.k: int = max(1, int(round((self.m / self.capacity) * math.log(2))))
+        self.num_bytes: int = (self.m + 7) // 8
+        self._bit_array: np.ndarray = np.zeros(self.num_bytes, dtype=np.uint8)
+        self.c1: int = 0x517CC1B727220A95
+        self.c2: int = 0x4F1BBCDCBFA54001
+        self.mask64: int = 0xFFFFFFFFFFFFFFFF
+        self.count: int = 0
+
+    def add_band_keys(self, band_idx: int, keys: np.ndarray) -> None:
+        """
+        Inserts all unique keys for a specific band into the Bloom filter using
+        vectorized numpy bitwise OR.
+        """
+        m = self.m
+        k = self.k
+        c1 = np.uint64(self.c1)
+        c2 = np.uint64(self.c2)
+        b_mult = np.uint64((band_idx * 0x9E3779B97F4A7C15) & self.mask64)
+        b_keys = keys.astype(np.uint64) ^ b_mult
+        u_keys = np.unique(b_keys)
+        h1 = u_keys * c1
+        h2 = (u_keys * c2) | np.uint64(1)
+        for i in range(k):
+            idx = ((h1 + np.uint64(i) * h2) % np.uint64(m)).astype(np.int64)
+            masks = (np.uint8(1) << (idx & 7)).astype(np.uint8)
+            bytes_idx = (idx >> 3).astype(np.int64)
+            np.bitwise_or.at(self._bit_array, bytes_idx, masks)
+        self.count += len(u_keys)
+
+    def contains(self, band_idx: int, key: int) -> bool:
+        """
+        Checks whether (band_idx, key) exists in the Bloom filter.
+        Returns False -> definitely not in gallery.
+        Returns True  -> probably in gallery.
+        """
+        mask64 = self.mask64
+        b_key = (key ^ (band_idx * 0x9E3779B97F4A7C15)) & mask64
+        h1 = (b_key * self.c1) & mask64
+        h2 = ((b_key * self.c2) & mask64) | 1
+        ba = self._bit_array
+        m = self.m
+        for i in range(self.k):
+            bit_pos = ((h1 + i * h2) & mask64) % m
+            if not (ba[bit_pos >> 3] & (1 << (bit_pos & 7))):
+                return False
+        return True
+
+    def count_ones(self) -> int:
+        return int(np.unpackbits(self._bit_array).sum())
+
+    def get_stats(self) -> dict:
+        set_bits = self.count_ones()
+        return {
+            "capacity": self.capacity,
+            "items_inserted": self.count,
+            "target_error_rate": self.target_error_rate,
+            "bit_array_size_bits": self.m,
+            "bit_array_size_bytes": self.num_bytes,
+            "bit_array_size_mb": round(self.num_bytes / (1024 * 1024), 2),
+            "num_hash_functions_k": self.k,
+            "bits_set_ones": set_bits,
+            "bit_fill_ratio": round(set_bits / self.m, 4),
+            "theoretical_fpr": round((set_bits / self.m) ** self.k, 6),
+        }

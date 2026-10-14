@@ -128,3 +128,28 @@ def test_lsh_index_candidate_retrieval():
     top_idx, top_score = scores[0]
     assert top_idx == 10
     assert top_score == 1.0
+
+
+def test_lsh_band_bloom_filter():
+    """
+    Verifies that LSHBandBloomFilter correctly filters band keys with zero false negatives
+    for indexed keys and rejects unseen keys.
+    """
+    from src.lsh_scale.bloom_filter_6m import LSHBandBloomFilter
+
+    bf = LSHBandBloomFilter(capacity=10000, error_rate=0.001)
+    keys = np.random.randint(0, 1000000, size=500, dtype=np.uint64)
+    bf.add_band_keys(band_idx=0, keys=keys)
+
+    # All inserted keys must be detected (0% false negatives)
+    for k in keys:
+        assert bf.contains(band_idx=0, key=int(k)) is True
+
+    # Different band index should be rejected
+    for k in keys[:50]:
+        assert bf.contains(band_idx=1, key=int(k)) is False
+
+    # Unseen keys should be rejected
+    unseen = np.random.randint(5000000, 10000000, size=100, dtype=np.uint64)
+    fp = sum(bf.contains(band_idx=0, key=int(u)) for u in unseen)
+    assert fp <= 1  # 0.1% target error rate

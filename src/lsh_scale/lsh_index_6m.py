@@ -21,6 +21,8 @@ Scoring:
 from typing import List, Set, Tuple, Optional, Union
 import numpy as np
 
+from src.lsh_scale.bloom_filter_6m import LSHBandBloomFilter
+
 
 class ScaledLSHIndex:
     """
@@ -38,8 +40,8 @@ class ScaledLSHIndex:
         self.sorted_keys: List[np.ndarray] = []
         self.sorted_indices: List[np.ndarray] = []
 
-        # Pre-filter: one frozenset of all bucket keys per band
-        self.band_key_sets: List[Set[int]] = []
+        # Pre-filter: LSH Band Bloom Filter
+        self.band_bloom_filter: Optional[LSHBandBloomFilter] = None
 
         self.num_indexed: int = 0
         self._fnv_mult = int(0x517CC1B727220A95)
@@ -84,7 +86,9 @@ class ScaledLSHIndex:
 
         self.sorted_keys = []
         self.sorted_indices = []
-        self.band_key_sets = []
+        # Capacity estimate: unique keys across bands
+        est_unique = max(100000, min(5000000, n_samples * self.bands // 4))
+        self.band_bloom_filter = LSHBandBloomFilter(capacity=est_unique, error_rate=0.001)
 
         for b in range(self.bands):
             band_slice = signatures[:, b * rows: (b + 1) * rows]
@@ -96,32 +100,32 @@ class ScaledLSHIndex:
 
             self.sorted_keys.append(sorted_k)
             self.sorted_indices.append(sorted_i)
-            # Build frozenset of unique keys for O(1) pre-filter lookups
-            self.band_key_sets.append(set(sorted_k.tolist()))
+            # Add unique band keys to the Bloom Filter
+            self.band_bloom_filter.add_band_keys(b, sorted_k)
 
         self.num_indexed += n_samples
 
     # ------------------------------------------------------------------
-    # Pre-filter (replaces Bloom filter)
+    # Pre-filter (LSH Band Bloom Filter)
     # ------------------------------------------------------------------
 
     def prefilter(self, query_sig: np.ndarray) -> bool:
         """
-        Fast pre-filter derived from the LSH index itself.
+        Fast biometric pre-filter using the LSH Band Bloom Filter.
 
-        Returns True  → at least one band bucket in the gallery matches the
-                        query signature, so a full lookup is warranted.
+        Returns True  → at least one band key hits the Bloom filter; full
+                        candidate lookup is warranted.
         Returns False → the query signature shares NO band bucket with any
-                        gallery record; this is a guaranteed non-match (zero
-                        false negatives), and the full lookup can be skipped.
-
-        This replaces the external identity-ID Bloom filter entirely.
+                        gallery record in the Bloom filter; this is an early
+                        non-match and the candidate search is skipped.
         """
+        if self.band_bloom_filter is None:
+            return True
         rows = self.rows
         for b in range(self.bands):
             b_slice = query_sig[b * rows: (b + 1) * rows]
             q_key = int(self._hash_band_single(b_slice, self._fnv_mult))
-            if q_key in self.band_key_sets[b]:
+            if self.band_bloom_filter.contains(b, q_key):
                 return True
         return False
 
@@ -199,3 +203,5 @@ class ScaledLSHIndex:
             top_sub = np.argsort(-matches)
 
         return [(int(cand_arr[i]), float(matches[i])) for i in top_sub]
+
+    score_candidates_vectorized = score_candidates

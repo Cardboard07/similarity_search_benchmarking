@@ -171,6 +171,8 @@ def run_experiment_1_recall_analysis(
         cand_counts = []
         zero_cand_cnt = 0
         zero_rec10_cnt = 0
+        bf_rejected_cnt = 0
+        bf_fn_cnt = 0
         by_qual = {q: {"recalls_10": [], "hits_10": [], "cand_hits": [], "zero_cnt": 0, "zero_cand_cnt": 0} for q in [3, 7, 5, 1, 9]}
         
         for i in range(n_queries):
@@ -179,6 +181,25 @@ def run_experiment_1_recall_analysis(
             q_q = query_quals[i]
 
             q_sig = engine.process_observation(pts, angles, types)
+
+            # Test LSH Band Bloom Filter
+            if not lsh.prefilter(q_sig):
+                bf_rejected_cnt += 1
+                bf_fn_cnt += 1
+                cand_counts.append(0)
+                zero_cand_cnt += 1
+                zero_rec10_cnt += 1
+                rec10_list.append(0.0)
+                hit10_list.append(0)
+                cand_rec_list.append(0.0)
+                cand_hit_list.append(0)
+                by_qual[q_q]["recalls_10"].append(0.0)
+                by_qual[q_q]["hits_10"].append(0)
+                by_qual[q_q]["cand_hits"].append(0)
+                by_qual[q_q]["zero_cnt"] += 1
+                by_qual[q_q]["zero_cand_cnt"] += 1
+                continue
+
             cands = lsh.find_candidates(q_sig)
             n_c = len(cands)
             cand_counts.append(n_c)
@@ -233,6 +254,9 @@ def run_experiment_1_recall_analysis(
         return {
             "method": f"LSH Index (bands={b}, rows={r} - {label})",
             "total_queries": n_queries,
+            "bloom_filter_rejected": int(bf_rejected_cnt),
+            "bloom_filter_false_negatives": int(bf_fn_cnt),
+            "bloom_filter_fn_rate_pct": float(bf_fn_cnt / n_queries * 100.0),
             "avg_candidates": float(np.mean(cand_counts)),
             "candidate_hit_rate_pct": float(np.mean(cand_hit_list) * 100.0),
             "candidate_mean_recall": float(np.mean(cand_rec_list)),
