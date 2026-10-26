@@ -1,0 +1,80 @@
+{
+  "dataset_summary": {
+    "total_queries_evaluated": 20,
+    "gallery_size": 10000,
+    "unique_identities_in_gallery": 1000,
+    "hyperparameters": {
+      "bands": 16,
+      "rows": 4,
+      "decision_threshold_tau": 0.4
+    },
+    "prefilter": "lsh_band_bloom_filter",
+    "probe_signatures": "computed_at_runtime",
+    "similarity_metric": "fraction_matching_positions"
+  },
+  "bloom_filter_summary": {
+    "queries_screened": 20,
+    "queries_rejected": 18,
+    "bloom_filter_false_negatives": 0,
+    "bloom_filter_fn_rate_pct": 0.0,
+    "avg_bloom_filter_latency_ms": 0.0517
+  },
+  "lsh_index_efficiency": {
+    "gallery_size": 10000,
+    "indexing_time_sec": 0.03,
+    "indexing_throughput_records_per_sec": 293692.7,
+    "avg_candidates_per_query": 0.95,
+    "candidate_pruning_ratio_pct": 99.9905,
+    "lsh_candidate_recall_pct": 10.0,
+    "lsh_false_negatives": 18
+  },
+  "retrieval_accuracy": {
+    "mrr": 0.1,
+    "map_at_10": 0.095,
+    "overall_hit_rate_pct": 10.0,
+    "overall_precision_10": 0.095,
+    "overall_recall_10": 0.095,
+    "hit_at_k": {
+      "Hit@1": 10.0,
+      "Hit@5": 10.0,
+      "Hit@10": 10.0,
+      "Hit@20": 10.0,
+      "Hit@50": 10.0
+    },
+    "precision_at_k": {
+      "P@1": 0.1,
+      "P@5": 0.1,
+      "P@10": 0.095,
+      "P@20": 0.0475,
+      "P@50": 0.019
+    },
+    "recall_at_k": {
+      "R@1": 0.01,
+      "R@5": 0.05,
+      "R@10": 0.095,
+      "R@20": 0.095,
+      "R@50": 0.095
+    }
+  },
+  "decision_threshold_metrics": {
+    "threshold_tau": 0.4,
+    "true_positives": 19,
+    "false_positives": 0,
+    "hit_rate_at_threshold_pct": 10.0,
+    "avg_recall_at_threshold": 0.095,
+    "avg_precision_at_threshold": 1.0
+  },
+  "latency_profile": {
+    "avg_total_ms": 0.49,
+    "p50_ms": 0.464,
+    "p90_ms": 0.584,
+    "p99_ms": 0.909,
+    "throughput_qps": 2040.4,
+    "stage_breakdown": {
+      "raw_minutiae_tokenization_ms": 0.418,
+      "bloom_filter_gating_ms": 0.0517,
+      "lsh_candidate_search_ms": 0.013,
+      "fraction_matching_scoring_ms": 0.006
+    }
+  }
+}

@@ -61,8 +61,8 @@ def main():
     parser.add_argument(
         "--num-workers",
         type=int,
-        default=min(10, cpu_count()),
-        help="Number of parallel worker processes."
+        default=min(64, cpu_count() or 4),
+        help="Number of parallel worker processes (default: auto-detected CPU cores, up to 64)."
     )
     parser.add_argument(
         "--batch-size",
@@ -95,7 +95,10 @@ def main():
     output_path = Path(args.output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    input_files = sorted(dataset_path.glob("dataset_*.h5"))
+    input_files = sorted(
+        dataset_path.glob("dataset_*.h5"),
+        key=lambda p: int(''.join(filter(str.isdigit, p.stem)) or 0)
+    )
     if not input_files:
         print(f"Error: No dataset_*.h5 files found in {args.dataset_dir}")
         sys.exit(1)
@@ -104,7 +107,7 @@ def main():
         input_files = input_files[:args.max_shards]
 
     print("=" * 70)
-    print(f"      6-MILLION SAMPLE SIGNATURE EXTRACTION PIPELINE")
+    print(f"       SCALABLE MINHASH SIGNATURE EXTRACTION PIPELINE")
     print("=" * 70)
     print(f"Input Directory    : {dataset_path}")
     print(f"Output Directory   : {output_path}")

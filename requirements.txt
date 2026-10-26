@@ -1,0 +1,15 @@
+# Core Numerical & Data Containers
+numpy>=1.24.0
+scipy>=1.10.0
+h5py>=3.8.0
+
+# Generation & Modeling
+scikit-learn>=1.2.0
+pyyaml>=6.0
+tqdm>=4.65.0
+
+# Plotting & Visualization
+matplotlib>=3.7.0
+
+# Testing & Quality Assurance
+pytest>=7.4.0

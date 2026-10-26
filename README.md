@@ -358,42 +358,53 @@ The system was designed to fit comfortably within commodity workstation RAM (16â
 
 ---
 
-## 8. CLI Usage Guide & Reproducibility
+## 8. HPC Deployment & Reproducibility Guide
 
-### 1. Run Automated Unit Tests
-Verifies mathematical equivalence of vectorized tokenization, modular MinHash, and fraction-matching scoring:
-```powershell
-python -m pytest tests/test_lsh_scale.py -v
+The codebase is fully equipped for immediate deployment to High-Performance Computing (HPC) clusters and scalable execution from 6M up to 102M+ observations. For complete node sizing and SLURM instructions, see [HPC_DEPLOYMENT_GUIDE.md](file:///c:/Users/hrish/Projects/research_projects/duplicate_detection/HPC_DEPLOYMENT_GUIDE.md).
+
+### Quickstart: Single-Command HPC Launcher
+```bash
+# Run all 3 benchmark experiments sequentially:
+./run_hpc.sh all_experiments
+
+# Or on Windows:
+run_hpc.bat all_experiments
 ```
 
-### 2. Extract Signatures Across 40 Shards (6M Observations)
-Processes all 40 HDF5 shards using randomized train/test split:
-```powershell
-python scripts/build_signatures_6m.py --num-workers 10 --batch-size 25000
+### The 3 Standardized Evaluation Experiments
+
+#### Experiment 1: LSH Band Bloom Filter Parameter Sweep
+Sweeps 9 canonical $(b,r)$ configurations over MinHash length 64, evaluating search space pruning %, false negative rates, Hit@10 %, and latency:
+```bash
+python scripts/run_exp1_band_sweep.py --num-queries 2500 --output reports/band_prefilter_sweep.json
 ```
 
-### 3. Run LSH-Band Pre-Filter Parameter Sweep
-Sweeps 9 band configurations on 200k gallery with runtime probe signatures:
-```powershell
-python scripts/run_band_prefilter_sweep.py --max-gallery 200000 --num-queries 500
+#### Experiment 2: Full-Scale Standard Retrieval Benchmark
+Evaluates MRR, MAP@10, Hit@1..50 recall curve, Precision@10, Recall@10, quality tier failure breakdown (`q1`, `q3`, `q5`, `q7`, `q9`), and latency percentiles on 4M gallery:
+```bash
+python scripts/run_exp2_retrieval_benchmark.py --num-queries 2500 --output reports/benchmark_full_scale.json
 ```
 
-### 4. Run Phase 1 Slider Tuning on 20k Identities
-Evaluates slider configurations with runtime probe signatures and generates visualization figures:
-```powershell
-python scripts/evaluate_lsh_experiments.py --gallery-size 200000 --eval-queries 500
+#### Experiment 3: 4-Way Architectural Latency & Throughput Benchmark
+Executes the 4-way architectural comparison across Positive, Negative, and Mixed workloads, measuring latency percentiles, throughput (QPS), and speedups vs. brute force:
+```bash
+python scripts/run_exp3_latency_4way.py --num-queries 100 --output reports/latency_4way_results.json
 ```
 
-### 5. Run Phase 2 Full 6M Standard Metrics Benchmark
-Evaluates MRR, MAP@10, Hit@K, candidate recall, zero-recall quality breakdown, and latency percentiles on 4M gallery:
-```powershell
-python scripts/evaluate_similarity_6m.py --max-gallery 4000000 --num-queries 2500 --bands 16 --rows 4 --tau 0.4
+### Master HPC Pipeline Orchestrator
+Coordinate generation, signature extraction, and experiments through a unified CLI:
+```bash
+# Run full 102M generation and all experiments:
+python scripts/run_hpc_pipeline.py --stage all --num-samples 102000000 --workers 64
+
+# Run quick verification smoke test on 50k subset:
+python scripts/run_hpc_pipeline.py --stage all_experiments --max-gallery 50000 --num-queries 50
 ```
 
-### 6. Run Phase 3 4-Way Architectural Latency Comparison
-Executes the 4-way latency evaluation across Positive, Negative, and Mixed workloads:
-```powershell
-python scripts/latency_comparison_6m.py --max-gallery 4000000 --num-queries 100 --bands 16 --rows 4
+### Cluster Job Submission (SLURM)
+Submit batch jobs to cluster queues with pre-configured CPU and 128 GB RAM allocations:
+```bash
+sbatch slurm_job.sh
 ```
 
 ---

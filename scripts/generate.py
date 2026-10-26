@@ -10,6 +10,7 @@ import pickle
 import sys
 import time
 from pathlib import Path
+from typing import Optional, Dict, Any, List, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from tqdm import tqdm
@@ -28,7 +29,8 @@ def generate_shard_worker(
     batch_size: int = 500,
     max_minutiae: int = 128,
     chunk_size: int = 1000,
-    compression: str = "lzf"
+    compression: str = "lzf",
+    filename: Optional[str] = None
 ) -> dict:
     """
     Worker function executed in parallel processes.
@@ -44,7 +46,12 @@ def generate_shard_worker(
         max_minutiae=max_minutiae
     )
 
-    filename = f"dataset_{shard_id:03d}.h5"
+    if filename is None:
+        p3 = os.path.join(output_dir, f"dataset_{shard_id:03d}.h5")
+        if os.path.exists(p3) or shard_id < 1000:
+            filename = f"dataset_{shard_id:03d}.h5"
+        else:
+            filename = f"dataset_{shard_id:04d}.h5"
     filepath = os.path.join(output_dir, filename)
     
     # If resuming and shard file already exists with full observations, verify and reuse
@@ -108,14 +115,20 @@ def generate_shard_worker(
 def main():
     parser = argparse.ArgumentParser(description="Large-scale synthetic fingerprint generation.")
     parser.add_argument("--models-path", type=str, default="models/fitted_models.pkl", help="Path to serialized models")
-    parser.add_argument("--num-identities", type=int, default=400000, help="Number of synthetic identities to generate")
+    parser.add_argument("--num-identities", type=int, default=None, help="Number of synthetic identities to generate")
+    parser.add_argument("--num-samples", type=int, default=None, help="Total observations to generate (e.g. 102000000). Overrides num-identities.")
     parser.add_argument("--batch-size", type=int, default=500, help="Number of identities per in-memory batch")
     parser.add_argument("--shard-size", type=int, default=150000, help="Observations per HDF5 shard file")
-    parser.add_argument("--workers", type=int, default=8, help="Number of parallel worker processes (default: 8)")
+    parser.add_argument("--workers", type=int, default=min(64, os.cpu_count() or 8), help="Number of parallel worker processes (default: auto-detected CPU cores)")
     parser.add_argument("--seed", type=int, default=42, help="Master deterministic seed")
     parser.add_argument("--output-dir", type=str, default="dataset", help="Output directory for HDF5 shards")
     parser.add_argument("--resume", action="store_true", help="Resume generation from existing manifest")
     args = parser.parse_args()
+
+    if args.num_samples is not None:
+        args.num_identities = args.num_samples // 15
+    elif args.num_identities is None:
+        args.num_identities = 400000  # Default to 6M observations (400,000 * 15)
 
     if not os.path.exists(args.models_path):
         raise FileNotFoundError(f"Fitted models not found at: {args.models_path}. Run fit_models.py first.")
@@ -140,8 +153,8 @@ def main():
 
     print("=" * 70)
     print("MILLION-SCALE FINGERPRINT GENERATION")
-    print(f"Total Identities:   {args.num_identities:,} (4 lakh)")
-    print(f"Total Observations: {total_observations:,} (6 million samples across 15 variations)")
+    print(f"Total Identities:   {args.num_identities:,}")
+    print(f"Total Observations: {total_observations:,}")
     print(f"Total Shards:       {total_shards} shards ({ids_per_shard:,} identities / {args.shard_size:,} obs each)")
     print(f"Parallel Workers:   {args.workers}")
     print(f"Output Directory:   {os.path.abspath(args.output_dir)}")
@@ -155,9 +168,16 @@ def main():
         id_start = s_id * ids_per_shard + 1
         id_end = min((s_id + 1) * ids_per_shard, args.num_identities)
         
-        # Check if already completed and file exists
-        shard_fname = f"dataset_{s_id:03d}.h5"
-        shard_path = os.path.join(args.output_dir, shard_fname)
+        # Check if 3-digit or 4-digit exists or is needed
+        p3 = os.path.join(args.output_dir, f"dataset_{s_id:03d}.h5")
+        p4 = os.path.join(args.output_dir, f"dataset_{s_id:04d}.h5")
+        if os.path.exists(p4) or total_shards >= 1000:
+            shard_fname = f"dataset_{s_id:04d}.h5"
+            shard_path = p4
+        else:
+            shard_fname = f"dataset_{s_id:03d}.h5"
+            shard_path = p3
+
         if args.resume and s_id in completed_shards and os.path.exists(shard_path):
             continue
 
@@ -171,7 +191,8 @@ def main():
             args.batch_size,
             max_minutiae,
             chunk_size,
-            compression
+            compression,
+            shard_fname
         ))
 
     already_done_identities = args.num_identities - sum(t[2] - t[1] + 1 for t in pending_tasks)

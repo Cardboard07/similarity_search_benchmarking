@@ -34,3 +34,7 @@ dataset/signatures_shards/
 !**/data_structure/.gitkeep
 
 tmp/
+logs/
+build/
+dist/
+*.egg-info/

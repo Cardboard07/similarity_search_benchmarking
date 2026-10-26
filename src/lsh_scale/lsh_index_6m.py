@@ -18,6 +18,8 @@ Scoring:
     does NOT use set-based Jaccard.
 """
 
+import os
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Set, Tuple, Optional, Union
 import numpy as np
 
@@ -28,9 +30,10 @@ class ScaledLSHIndex:
     """
     Locality-Sensitive Hashing index for 64-element MinHash signatures.
     """
-    def __init__(self, bands: int = 16, rows: Optional[int] = None):
+    def __init__(self, bands: int = 16, rows: Optional[int] = None, bloom_fp_rate: float = 0.001):
         self.bands: int = bands
         self.rows: int = rows if rows is not None else (64 // bands)
+        self.bloom_fp_rate: float = bloom_fp_rate
         if self.bands * self.rows > 64:
             raise ValueError(
                 f"bands * rows ({self.bands * self.rows}) exceeds signature length 64."
@@ -73,35 +76,57 @@ class ScaledLSHIndex:
     # Indexing
     # ------------------------------------------------------------------
 
-    def index_signatures(self, signatures: np.ndarray, start_idx: int = 0) -> None:
+    def index_signatures(
+        self,
+        signatures: np.ndarray,
+        start_idx: int = 0,
+        max_workers: Optional[int] = None
+    ) -> None:
         """
-        Indexes a full array of gallery signatures.
+        Indexes a full array of gallery signatures across all bands.
+        Supports multi-threaded parallel sorting across CPU cores.
 
         Args:
             signatures: Shape (N, 64) uint32 array of MinHash signatures.
             start_idx:  Global index offset (for multi-batch indexing).
+            max_workers: Max parallel threads for sorting bands (default: min(bands, cpu_count)).
         """
         n_samples = len(signatures)
         rows = self.rows
 
         self.sorted_keys = []
         self.sorted_indices = []
-        # Capacity estimate: unique keys across bands
-        est_unique = max(100000, min(5000000, n_samples * self.bands // 4))
-        self.band_bloom_filter = LSHBandBloomFilter(capacity=est_unique, error_rate=0.001)
 
-        for b in range(self.bands):
+        # Scalable Capacity estimate: unique keys across bands (uncapped for 100M+ scale)
+        est_unique = max(100000, n_samples * self.bands // 4)
+        self.band_bloom_filter = LSHBandBloomFilter(capacity=est_unique, error_rate=self.bloom_fp_rate)
+
+        mult = self._fnv_mult
+
+        def _process_band(b: int) -> Tuple[int, np.ndarray, np.ndarray]:
             band_slice = signatures[:, b * rows: (b + 1) * rows]
-            keys = self._hash_band_vectorized(band_slice, self._fnv_mult)
-
+            keys = ScaledLSHIndex._hash_band_vectorized(band_slice, mult)
             order = np.argsort(keys)
             sorted_k = keys[order]
             sorted_i = (order + start_idx).astype(np.int32)
+            return b, sorted_k, sorted_i
 
-            self.sorted_keys.append(sorted_k)
-            self.sorted_indices.append(sorted_i)
-            # Add unique band keys to the Bloom Filter
-            self.band_bloom_filter.add_band_keys(b, sorted_k)
+        num_threads = max_workers if max_workers is not None else min(self.bands, os.cpu_count() or 1)
+        if num_threads > 1:
+            with ThreadPoolExecutor(max_workers=num_threads) as executor:
+                results = list(executor.map(_process_band, range(self.bands)))
+            # Maintain deterministic band index ordering
+            results.sort(key=lambda x: x[0])
+            for b, sorted_k, sorted_i in results:
+                self.sorted_keys.append(sorted_k)
+                self.sorted_indices.append(sorted_i)
+                self.band_bloom_filter.add_band_keys(b, sorted_k)
+        else:
+            for b in range(self.bands):
+                _, sorted_k, sorted_i = _process_band(b)
+                self.sorted_keys.append(sorted_k)
+                self.sorted_indices.append(sorted_i)
+                self.band_bloom_filter.add_band_keys(b, sorted_k)
 
         self.num_indexed += n_samples
 
