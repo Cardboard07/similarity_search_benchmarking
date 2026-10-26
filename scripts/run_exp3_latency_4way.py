@@ -3,7 +3,7 @@
 Experiment 3: 4-Way Architectural Latency & Throughput Benchmark.
 
 Evaluates 4 architectures across Positive, Negative, and Mixed query workloads
-at arbitrary scale (e.g. 6M to 100M+):
+at arbitrary scale (e.g. 6M to 105M+):
   1. Only MinHash (Brute Force Linear Scan)
   2. LSH + Band Bloom Filter (Full Hybrid Pipeline)
   3. Band Bloom Filter Only (No LSH Candidate Filtering)

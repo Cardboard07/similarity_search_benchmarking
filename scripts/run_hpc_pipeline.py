@@ -7,7 +7,7 @@ from million-scale generation and MinHash signature extraction to executing the
 three canonical evaluation experiments.
 
 Stages supported:
-  - generate:        Generates synthetic fingerprint shards (up to 102M+ samples).
+  - generate:        Generates synthetic fingerprint shards (up to 105M+ samples).
   - signatures:      Extracts 64-element MinHash signatures across all HDF5 shards.
   - exp1:            Experiment 1: LSH Band Bloom Filter parameter sweep (9 canonical configs).
   - exp2:            Experiment 2: Full-scale retrieval benchmark (MRR, MAP@10, Hit@1..50, quality breakdown).
@@ -22,8 +22,8 @@ Usage:
   # Run quick smoke test on 50k samples:
   python scripts/run_hpc_pipeline.py --stage all_experiments --max-gallery 50000 --num-queries 20
 
-  # Run full generation to 102M and evaluate:
-  python scripts/run_hpc_pipeline.py --stage all --num-samples 102000000 --workers 64
+  # Run full generation to 105M (7M identities) and evaluate:
+  python scripts/run_hpc_pipeline.py --stage all --num-samples 105000000 --workers 64
 """
 
 import os
@@ -100,7 +100,7 @@ def main():
         choices=["generate", "signatures", "exp1", "exp2", "exp3", "all_experiments", "all"],
         help="Pipeline stage to execute (default: all_experiments)"
     )
-    parser.add_argument("--num-samples", type=int, default=None, help="Total observations to generate (e.g. 102000000)")
+    parser.add_argument("--num-samples", type=int, default=None, help="Total observations to generate (e.g. 105000000)")
     parser.add_argument("--num-identities", type=int, default=None, help="Total identities to generate")
     parser.add_argument("--shard-size", type=int, default=150000, help="Observations per shard file")
     parser.add_argument("--workers", type=int, default=os.cpu_count() or 8, help="Number of parallel worker processes/threads")

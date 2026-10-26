@@ -116,7 +116,7 @@ def main():
     parser = argparse.ArgumentParser(description="Large-scale synthetic fingerprint generation.")
     parser.add_argument("--models-path", type=str, default="models/fitted_models.pkl", help="Path to serialized models")
     parser.add_argument("--num-identities", type=int, default=None, help="Number of synthetic identities to generate")
-    parser.add_argument("--num-samples", type=int, default=None, help="Total observations to generate (e.g. 102000000). Overrides num-identities.")
+    parser.add_argument("--num-samples", type=int, default=None, help="Total observations to generate (e.g. 105000000). Overrides num-identities.")
     parser.add_argument("--batch-size", type=int, default=500, help="Number of identities per in-memory batch")
     parser.add_argument("--shard-size", type=int, default=150000, help="Observations per HDF5 shard file")
     parser.add_argument("--workers", type=int, default=min(64, os.cpu_count() or 8), help="Number of parallel worker processes (default: auto-detected CPU cores)")

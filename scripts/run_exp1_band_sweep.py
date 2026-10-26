@@ -10,7 +10,7 @@ Evaluating:
   - End-to-end query latency and Bloom filter gating latency
 
 Probe signatures are computed dynamically at RUNTIME from raw minutiae.
-Designed for immediate, error-free execution at any scale (200k to 100M+).
+Designed for immediate, error-free execution at any scale (200k to 105M+).
 
 Usage:
     python scripts/run_exp1_band_sweep.py

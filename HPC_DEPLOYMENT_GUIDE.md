@@ -1,36 +1,36 @@
-# HPC Deployment & 100M+ Scale Execution Guide
+# HPC Deployment & 105M+ Scale Execution Guide
 
-This guide details the complete deployment, hardware sizing, and experiment execution procedures for running the **Synthetic Fingerprint Generation and LSH-Band Bloom Filter Duplicate Detection Engine** at massive scale (6M to 102M+ observations) on High-Performance Computing (HPC) clusters and cloud compute instances.
+This guide details the complete deployment, hardware sizing, and experiment execution procedures for running the **Synthetic Fingerprint Generation and LSH-Band Bloom Filter Duplicate Detection Engine** at massive scale (6M to 105M+ observations) on High-Performance Computing (HPC) clusters and cloud compute instances.
 
 ---
 
-## 1. System Architecture & Sizing for 100 Million Scale
+## 1. System Architecture & Sizing for 105 Million Scale
 
-### Scale Specifications (102M Observations)
-- **Total Samples ($N$):** $102,000,000$ observations (6.8 million unique synthetic identities $\times$ 15 impressions).
-- **Train/Gallery Partition ($2/3$):** $68,000,000$ reference fingerprint signatures.
-- **Test/Probe Partition ($1/3$):** $34,000,000$ runtime evaluation queries.
+### Scale Specifications (105M Observations)
+- **Total Samples ($N$):** $105,000,000$ observations (7.0 million unique synthetic identities $\times$ 15 impressions).
+- **Train/Gallery Partition ($2/3$):** $70,000,000$ reference fingerprint signatures.
+- **Test/Probe Partition ($1/3$):** $35,000,000$ runtime evaluation queries.
 - **Signature Length:** 64 MinHash uint32 hashes per fingerprint observation.
 - **LSH Index Configuration:** $b = 16$ bands, $r = 4$ rows per band ($b \times r = 64$).
 - **Similarity Metric:** Pure fraction of matching signature positions ($\mathrm{mean}(\mathrm{sig}_A == \mathrm{sig}_B)$).
 
-### In-Memory RAM Breakdown at 68M Gallery Records
+### In-Memory RAM Breakdown at 70M Gallery Records
 All arrays are allocated contiguously with zero duplicate copies during loading:
 
 | Memory Component | Formula / Dimensions | Peak RAM |
 | :--- | :--- | :--- |
-| **Gallery Signatures Matrix** | $68,000,000 \times 64 \times 4\text{ bytes}$ (uint32) | **17.41 GB** |
-| **Gallery Identity IDs** | $68,000,000 \times 4\text{ bytes}$ (int32) | **0.27 GB** |
-| **LSH Inverted Sorted Keys** | 16 bands $\times 68,000,000 \times 8\text{ bytes}$ (uint64) | **8.70 GB** |
-| **LSH Inverted Sorted Indices** | 16 bands $\times 68,000,000 \times 4\text{ bytes}$ (int32) | **4.35 GB** |
-| **Probabilistic LSH-Band Bloom Filter** | $272\text{M unique keys},\; p = 0.001\; (\sim 14.38\text{ bits/key})$ | **1.95 GB** |
+| **Gallery Signatures Matrix** | $70,000,000 \times 64 \times 4\text{ bytes}$ (uint32) | **17.92 GB** |
+| **Gallery Identity IDs** | $70,000,000 \times 4\text{ bytes}$ (int32) | **0.28 GB** |
+| **LSH Inverted Sorted Keys** | 16 bands $\times 70,000,000 \times 8\text{ bytes}$ (uint64) | **8.96 GB** |
+| **LSH Inverted Sorted Indices** | 16 bands $\times 70,000,000 \times 4\text{ bytes}$ (int32) | **4.48 GB** |
+| **Probabilistic LSH-Band Bloom Filter** | $280\text{M unique keys},\; p = 0.001\; (\sim 14.38\text{ bits/key})$ | **2.01 GB** |
 | **OS, Python Runtime & Query Buffers** | Active query candidates, working heap | **~14.50 GB** |
-| **Total In-Memory Working Set** | | **~47.18 GB** |
+| **Total In-Memory Working Set** | | **~48.15 GB** |
 
 ### Recommended Hardware Node Specifications
 - **Optimal Compute Node:** **128 GB RAM**, **32–64 CPU cores** (e.g., AWS `c6i.16xlarge` / `m6i.16xlarge`, GCP `c2-standard-60`, or dual-socket AMD EPYC / Intel Xeon HPC node).
 - **Minimum Viable Node:** **64 GB RAM**, **16 CPU cores**.
-- **Storage:** **~180 GB NVMe SSD** (fast parallel I/O for 680 HDF5 shards).
+- **Storage:** **~185 GB NVMe SSD** (fast parallel I/O for 700 HDF5 shards).
 
 ---
 
@@ -142,11 +142,11 @@ python scripts/run_hpc_pipeline.py --stage all_experiments --max-gallery 50000 -
 ```
 
 ### Full End-to-End Scaling Run (Generation -> Extraction -> Experiments)
-To generate 102 million samples across 64 cores and run all experiments:
+To generate 105 million samples across 64 cores and run all experiments:
 ```bash
 python scripts/run_hpc_pipeline.py \
     --stage all \
-    --num-samples 102000000 \
+    --num-samples 105000000 \
     --workers 64 \
     --shard-size 150000 \
     --num-queries 2500
@@ -189,10 +189,10 @@ Edit `slurm_job.sh` to match your cluster's partition and allocation:
 ## 6. Architecture & Optimization Safeguards
 
 1. **Multi-Threaded Parallel Band Sorting:**  
-   `ScaledLSHIndex.index_signatures` distributes the 16 independent band `np.argsort` sorting operations across CPU cores using Python's `ThreadPoolExecutor`. Because NumPy argsort executes in optimized C without holding the GIL, 68M records index in under 2 minutes on a 64-core node.
+   `ScaledLSHIndex.index_signatures` distributes the 16 independent band `np.argsort` sorting operations across CPU cores using Python's `ThreadPoolExecutor`. Because NumPy argsort executes in optimized C without holding the GIL, 70M records index in under 2 minutes on a 64-core node.
 
 2. **Zero-Copy Contiguous HDF5 Reading:**  
-   `ShardedSignatureDataset.load_gallery` and `load_probes` calculate total records in advance, pre-allocate single `np.empty((N, 64), dtype=np.uint32)` destination arrays, and stream shard slices directly into memory. This eliminates intermediate Python lists and prevents the 17.4 GB duplicate memory spike during array concatenation.
+   `ShardedSignatureDataset.load_gallery` and `load_probes` calculate total records in advance, pre-allocate single `np.empty((N, 64), dtype=np.uint32)` destination arrays, and stream shard slices directly into memory. This eliminates intermediate Python lists and prevents the 17.9 GB duplicate memory spike during array concatenation.
 
 3. **Numeric Shard File Sorting:**  
    All shard readers extract digits numerically (`key=lambda p: int(''.join(filter(str.isdigit, p.stem)))`), completely preventing lexicographical bugs where `dataset_1000.h5` would precede `dataset_20.h5`.

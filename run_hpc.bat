@@ -7,7 +7,7 @@ REM   run_hpc.bat exp1                              # Run Experiment 1 (Band Swe
 REM   run_hpc.bat exp2                              # Run Experiment 2 (Retrieval Benchmark)
 REM   run_hpc.bat exp3                              # Run Experiment 3 (4-Way Latency)
 REM   run_hpc.bat all_experiments                   # Run Exp 1, 2, and 3 sequentially
-REM   run_hpc.bat all --num-samples 102000000       # Full generation + evaluation
+REM   run_hpc.bat all --num-samples 105000000       # Full generation + evaluation
 REM ============================================================================
 
 setlocal enabledelayedexpansion

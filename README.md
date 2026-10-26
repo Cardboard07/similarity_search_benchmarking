@@ -360,7 +360,7 @@ The system was designed to fit comfortably within commodity workstation RAM (16â
 
 ## 8. HPC Deployment & Reproducibility Guide
 
-The codebase is fully equipped for immediate deployment to High-Performance Computing (HPC) clusters and scalable execution from 6M up to 102M+ observations. For complete node sizing and SLURM instructions, see [HPC_DEPLOYMENT_GUIDE.md](file:///c:/Users/hrish/Projects/research_projects/duplicate_detection/HPC_DEPLOYMENT_GUIDE.md).
+The codebase is fully equipped for immediate deployment to High-Performance Computing (HPC) clusters and scalable execution from 6M up to 105M+ observations (7.0 million identities). For complete node sizing and SLURM instructions, see [HPC_DEPLOYMENT_GUIDE.md](file:///c:/Users/hrish/Projects/research_projects/duplicate_detection/HPC_DEPLOYMENT_GUIDE.md).
 
 ### Quickstart: Single-Command HPC Launcher
 ```bash
@@ -394,8 +394,8 @@ python scripts/run_exp3_latency_4way.py --num-queries 100 --output reports/laten
 ### Master HPC Pipeline Orchestrator
 Coordinate generation, signature extraction, and experiments through a unified CLI:
 ```bash
-# Run full 102M generation and all experiments:
-python scripts/run_hpc_pipeline.py --stage all --num-samples 102000000 --workers 64
+# Run full 105M generation and all experiments:
+python scripts/run_hpc_pipeline.py --stage all --num-samples 105000000 --workers 64
 
 # Run quick verification smoke test on 50k subset:
 python scripts/run_hpc_pipeline.py --stage all_experiments --max-gallery 50000 --num-queries 50

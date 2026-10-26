@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#SBATCH --job-name=dup_det_100m
+#SBATCH --job-name=dup_det_105m
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=64
@@ -10,7 +10,7 @@
 #SBATCH --error=logs/slurm_%j.err
 
 # ==============================================================================
-# SLURM Batch Submission Script for 100M+ Scale Duplicate Detection
+# SLURM Batch Submission Script for 105M+ Scale Duplicate Detection
 # ==============================================================================
 # Submit to queue with:
 #   sbatch slurm_job.sh
@@ -51,17 +51,17 @@ python -c "import numpy, scipy, h5py, tqdm; print('All core libraries verified!'
 
 # 4. Pipeline Execution Options:
 #
-# Option A: Run all three benchmark experiments on existing 6M/100M dataset
+# Option A: Run all three benchmark experiments on existing dataset
 python scripts/run_hpc_pipeline.py \
     --stage all_experiments \
     --workers ${SLURM_CPUS_PER_TASK:-64} \
     --num-queries 2500 \
     --reports-dir reports
 
-# Option B: Run full 102M generation, signature extraction, and experiments (Uncomment if generating 102M)
+# Option B: Run full 105M generation (7M identities), signature extraction, and experiments (Uncomment if generating 105M)
 # python scripts/run_hpc_pipeline.py \
 #     --stage all \
-#     --num-samples 102000000 \
+#     --num-samples 105000000 \
 #     --workers ${SLURM_CPUS_PER_TASK:-64} \
 #     --num-queries 2500 \
 #     --reports-dir reports

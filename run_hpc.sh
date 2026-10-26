@@ -7,7 +7,7 @@
 #   ./run_hpc.sh exp2                              # Run Experiment 2 (Retrieval Benchmark)
 #   ./run_hpc.sh exp3                              # Run Experiment 3 (4-Way Latency)
 #   ./run_hpc.sh all_experiments                   # Run Exp 1, 2, and 3 sequentially
-#   ./run_hpc.sh all --num-samples 102000000       # Full 102M generation + all experiments
+#   ./run_hpc.sh all --num-samples 105000000       # Full 105M generation + all experiments
 # ==============================================================================
 
 set -euo pipefail
@@ -36,7 +36,7 @@ else
 fi
 
 echo "================================================================================"
-echo "           HPC DUPLICATE DETECTION LAUNCHER (Scale: 6M - 100M+)"
+echo "           HPC DUPLICATE DETECTION LAUNCHER (Scale: 6M - 105M+)"
 echo "================================================================================"
 echo " Working Directory: ${SCRIPT_DIR}"
 echo " Python Binary:     $(which ${PYTHON})"
