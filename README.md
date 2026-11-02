@@ -13,6 +13,8 @@ The large-scale benchmark consists of four empirical evaluations:
 - **Phase 2**: Full 6M standard metrics evaluation (4M gallery, 2,500 runtime probes across 5 quality levels).
 - **Phase 3**: 4-way architectural latency and accuracy comparison at full 4M gallery scale across positive, negative, and mixed workloads.
 
+> **Engineering & Review Report**: For an in-depth breakdown of how every subsystem was built, including data structures, memory layouts, vectorized optimizations, and file locations, see [PROJECT_STRUCTURE_AND_REVIEW.md](file:///c:/Users/hrish/Projects/research_projects/duplicate_detection/PROJECT_STRUCTURE_AND_REVIEW.md).
+
 ---
 
 ## 1. System Architecture & General Working
@@ -360,7 +362,7 @@ The system was designed to fit comfortably within commodity workstation RAM (16â
 
 ## 8. HPC Deployment & Reproducibility Guide
 
-The codebase is fully equipped for immediate deployment to High-Performance Computing (HPC) clusters and scalable execution from 6M up to 105M+ observations (7.0 million identities). For complete node sizing and SLURM instructions, see [HPC_DEPLOYMENT_GUIDE.md](file:///c:/Users/hrish/Projects/research_projects/duplicate_detection/HPC_DEPLOYMENT_GUIDE.md).
+The codebase is fully equipped for immediate deployment to High-Performance Computing (HPC) clusters and scalable execution from 6M up to 105M+ observations (7.0 million identities). For complete implementation design and construction details, see [PROJECT_STRUCTURE_AND_REVIEW.md](file:///c:/Users/hrish/Projects/research_projects/duplicate_detection/PROJECT_STRUCTURE_AND_REVIEW.md). For cluster node sizing and SLURM instructions, see [HPC_DEPLOYMENT_GUIDE.md](file:///c:/Users/hrish/Projects/research_projects/duplicate_detection/HPC_DEPLOYMENT_GUIDE.md).
 
 ### Quickstart: Single-Command HPC Launcher
 ```bash
